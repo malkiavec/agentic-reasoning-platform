@@ -1,4 +1,5 @@
 import os
+import time
 from uuid import UUID
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -40,7 +41,7 @@ async def distributed_rate_limit(request: Request, call_next):
         return await call_next(request)
     redis = Redis.from_url(os.getenv("REDIS_URL", "redis://redis:6379/0"), decode_responses=True)
     client = request.headers.get("x-forwarded-for", request.client.host if request.client else "unknown").split(",")[0].strip()
-    key = f"agent:http:rate:{client}:{int(__import__("time").time() // 60)}"
+    key = f"agent:http:rate:{client}:{int(time.time() // 60)}"
     try:
         count = await redis.incr(key)
         if count == 1:
