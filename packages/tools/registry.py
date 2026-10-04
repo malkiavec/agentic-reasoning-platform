@@ -1,7 +1,20 @@
+import inspect
 from dataclasses import dataclass, field
 from typing import Any
 
-from packages.tools.contracts import ToolAdapter, ToolSecurity
+from packages.tools.contracts import ToolAdapter, ToolContext, ToolSecurity
+
+class CallableAdapter(ToolAdapter):
+    def __init__(self, name: str, handler: Any, security: ToolSecurity):
+        self.name = name
+        self.security = security
+        self._handler = handler
+
+    async def invoke(self, arguments: dict[str, Any], context: ToolContext) -> Any:
+        value = self._handler(**arguments)
+        if inspect.isawaitable(value):
+            return await value
+        return value
 
 @dataclass(frozen=True)
 class ToolSpec:
@@ -26,11 +39,13 @@ class ToolRegistry:
     def __init__(self) -> None:
         self._tools: dict[str, tuple[ToolSpec, ToolAdapter]] = {}
 
-    def register(self, spec: ToolSpec, adapter: ToolAdapter) -> None:
+    def register(self, spec: ToolSpec, adapter: ToolAdapter | Any) -> None:
         name = spec.name.strip()
         if not name or name in self._tools:
             raise ValueError(f"tool already registered: {name}")
-        if getattr(adapter, "name", None) != name:
+        if not hasattr(adapter, "invoke"):
+            adapter = CallableAdapter(name, adapter, spec.security)
+        elif getattr(adapter, "name", None) != name:
             raise ValueError("adapter_name_mismatch")
         if spec.rate_limit_per_minute < 1:
             raise ValueError("invalid_tool_rate_limit")
