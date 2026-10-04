@@ -7,7 +7,7 @@ async def create_run(session: AsyncSession, **values) -> RunRecord:
     # Idempotency is tenant-scoped at the API boundary; unique DB key prevents duplicates.
     key = values.get("idempotency_key")
     if key:
-        existing = await session.scalar(select(RunRecord).where(RunRecord.idempotency_key == key))
+        existing = await session.scalar(select(RunRecord).where(RunRecord.tenant_id == values.get("tenant_id"), RunRecord.idempotency_key == key))
         if existing:
             return existing
     record = RunRecord(**values)
