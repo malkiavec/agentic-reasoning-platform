@@ -1,47 +1,66 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 
-type Run={id:string;state:string;model:string;steps:number;tokens:number;latency:string};
-const runs:Run[]=[
- {id:"run_01J9A8F2",state:"executing",model:"reasoning-default",steps:12,tokens:8421,latency:"18.4s"},
- {id:"run_01J9A71C",state:"waiting_approval",model:"reasoning-default",steps:7,tokens:5120,latency:"11.2s"},
- {id:"run_01J9A55B",state:"completed",model:"reasoning-default",steps:24,tokens:18420,latency:"42.7s"},
-];
+type Run={run_id:string;state:string;model:string;reasoning_effort:string;created_at:string;updated_at:string};
+type Tool={name:string;description:string;risk:string;requires_approval:boolean};
+
+async function api<T>(path:string, init?:RequestInit):Promise<T>{
+  const response=await fetch(path,{...init,credentials:"include",headers:{"Content-Type":"application/json",...(init?.headers||{})}});
+  if(!response.ok) throw new Error((await response.json().catch(()=>({}))).detail||`HTTP ${response.status}`);
+  return response.json();
+}
+
 function App(){
- return <div className="shell">
-  <aside><div className="brand">ARP <span>CONTROL PLANE</span></div>
-   <nav><a className="active">Overview</a><a>Runs</a><a>Approvals <b>3</b></a><a>Agents</a><a>Tools</a><a>Memory</a><a>Evaluations</a></nav>
-   <div className="tenant"><small>TENANT</small><strong>default</strong><span>Production</span></div>
-  </aside>
-  <main><header><div><small>OPERATIONS / OVERVIEW</small><h1>Agent Control Plane</h1></div><button>＋ New run</button></header>
-   <section className="stats">
-    <div><small>ACTIVE RUNS</small><strong>4</strong><em>+2 today</em></div>
-    <div><small>AWAITING APPROVAL</small><strong>3</strong><em>2 high risk</em></div>
-    <div><small>24H TOKENS</small><strong>1.82M</strong><em>+14.8%</em></div>
-    <div><small>SUCCESS RATE</small><strong>97.4%</strong><em>+1.2%</em></div>
-   </section>
-   <section className="grid"><div className="panel wide"><div className="panelhead"><h2>Live runs</h2><span>● streaming</span></div>
-    <table><thead><tr><th>RUN</th><th>STATE</th><th>MODEL</th><th>STEPS</th><th>TOKENS</th><th>LATENCY</th></tr></thead><tbody>
-     {runs.map(r=><tr key={r.id}><td className="mono">{r.id}</td><td><i className={"dot "+r.state}/>{r.state.replace("_"," ")}</td><td>{r.model}</td><td>{r.steps}</td><td>{r.tokens.toLocaleString()}</td><td>{r.latency}</td></tr>)}
-    </tbody></table></div>
-    <div className="panel"><div className="panelhead"><h2>Approvals</h2><span>3 pending</span></div>
-      <div className="approval"><div><strong>browser_write</strong><small>HIGH · run_01J9A71C</small></div><button>Review</button></div>
-      <div className="approval"><div><strong>shell</strong><small>HIGH · run_01J9A44D</small></div><button>Review</button></div>
-      <div className="approval"><div><strong>external_api</strong><small>MEDIUM · run_01J9A32A</small></div><button>Review</button></div>
-    </div>
-   </section>
-   <section className="grid"><div className="panel wide"><div className="panelhead"><h2>Execution stream</h2><span>last 60s</span></div><div className="stream">
-    <p><time>12:42:18</time><b>run_01J9A8F2</b> planner created 3-step execution plan</p>
-    <p><time>12:42:19</time><b>agent</b> dispatched 2 parallel tool calls</p>
-    <p><time>12:42:21</time><b>policy</b> tool <code>browser_write</code> requires approval</p>
-    <p><time>12:42:24</time><b>memory</b> retrieved 8 relevant memories · rerank 0.91</p>
-   </div></div>
-    <div className="panel"><div className="panelhead"><h2>System health</h2><span className="ok">healthy</span></div>
-     <div className="health"><label>API <span>99.99%</span></label><div><i style={{width:"99%"}}/></div><label>Worker queue <span>18%</span></label><div><i style={{width:"18%"}}/></div><label>PostgreSQL <span>42ms</span></label><div><i style={{width:"42%"}}/></div><label>Redis <span>8ms</span></label><div><i style={{width:"8%"}}/></div></div>
-    </div>
-   </section>
-  </main>
- </div>
+  const [runs,setRuns]=useState<Run[]>([]);
+  const [tools,setTools]=useState<Tool[]>([]);
+  const [prompt,setPrompt]=useState("");
+  const [error,setError]=useState("");
+  const [busy,setBusy]=useState(false);
+
+  const refresh=async()=>{try{
+    const [r,t]=await Promise.all([api<Run[]>("/v1/runs"),api<Tool[]>("/v1/tools")]);
+    setRuns(r); setTools(t); setError("");
+  }catch(e){setError(e instanceof Error?e.message:"Unable to load control plane");}};
+  useEffect(()=>{refresh(); const timer=setInterval(refresh,3000); return()=>clearInterval(timer)},[]);
+
+  const newRun=async()=>{
+    if(!prompt.trim()) return;
+    setBusy(true);
+    try{await api("/v1/runs",{method:"POST",body:JSON.stringify({prompt:prompt.trim()})});setPrompt("");await refresh();}
+    catch(e){setError(e instanceof Error?e.message:"Unable to create run");}
+    finally{setBusy(false);}
+  };
+  const cancel=async(id:string)=>{try{await api(`/v1/runs/${id}/cancel`,{method:"POST"});await refresh();}catch(e){setError(e instanceof Error?e.message:"Cancel failed");}};
+  const retry=async(id:string)=>{try{await api(`/v1/runs/${id}/retry`,{method:"POST"});await refresh();}catch(e){setError(e instanceof Error?e.message:"Retry failed");}};
+
+  const active=runs.filter(r=>!["completed","failed","cancelled"].includes(r.state)).length;
+  return <div className="shell">
+    <aside><div className="brand">ARP <span>CONTROL PLANE</span></div>
+      <nav><a className="active">Overview</a><a>Runs</a><a>Approvals</a><a>Tools</a><a>Memory</a><a>Evaluations</a></nav>
+      <div className="tenant"><small>AUTHENTICATED TENANT</small><strong>Current tenant</strong><span>Live control plane</span></div>
+    </aside>
+    <main><header><div><small>OPERATIONS / OVERVIEW</small><h1>Agent Control Plane</h1></div></header>
+      {error&&<div className="panel error">{error}</div>}
+      <section className="stats">
+        <div><small>ACTIVE RUNS</small><strong>{active}</strong><em>live</em></div>
+        <div><small>TOTAL RUNS</small><strong>{runs.length}</strong><em>latest 50</em></div>
+        <div><small>REGISTERED TOOLS</small><strong>{tools.length}</strong><em>executable only</em></div>
+        <div><small>HIGH-RISK TOOLS</small><strong>{tools.filter(t=>t.requires_approval).length}</strong><em>approval gated</em></div>
+      </section>
+      <section className="panel composer"><div className="panelhead"><h2>New agent run</h2><span>authenticated</span></div>
+        <textarea value={prompt} onChange={e=>setPrompt(e.target.value)} placeholder="Describe the task for the agent..." />
+        <button disabled={busy||!prompt.trim()} onClick={newRun}>{busy?"Queueing…":"＋ New run"}</button>
+      </section>
+      <section className="grid"><div className="panel wide"><div className="panelhead"><h2>Live runs</h2><span>auto-refresh 3s</span></div>
+        <table><thead><tr><th>RUN</th><th>STATE</th><th>MODEL</th><th>EFFORT</th><th>UPDATED</th><th>ACTION</th></tr></thead><tbody>
+          {runs.map(r=><tr key={r.run_id}><td className="mono">{r.run_id.slice(0,12)}</td><td><i className={"dot "+r.state}/>{r.state.replace("_"," ")}</td><td>{r.model}</td><td>{r.reasoning_effort}</td><td>{new Date(r.updated_at).toLocaleTimeString()}</td><td>{r.state==="failed"||r.state==="cancelled"?<button onClick={()=>retry(r.run_id)}>Retry</button>:r.state!=="completed"?<button onClick={()=>cancel(r.run_id)}>Cancel</button>:null}</td></tr>)}
+        </tbody></table>
+      </div>
+      <div className="panel"><div className="panelhead"><h2>Executable tools</h2><span>{tools.length}</span></div>
+        {tools.map(t=><div className="approval" key={t.name}><div><strong>{t.name}</strong><small>{t.risk.toUpperCase()} · {t.requires_approval?"APPROVAL REQUIRED":"AUTOMATED"}</small></div></div>)}
+      </div></section>
+    </main>
+  </div>;
 }
 createRoot(document.getElementById("root")!).render(<React.StrictMode><App/></React.StrictMode>);
