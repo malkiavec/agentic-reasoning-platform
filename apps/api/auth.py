@@ -33,7 +33,8 @@ class OIDCVerifier:
         except httpx.HTTPError as exc:
             raise HTTPException(status_code=503, detail="oidc_jwks_unavailable") from exc
         payload = response.json()
-        self._keys = {key["kid"]: key for key in payload.get("keys", []) if key.get("kid")}
+        keys = payload.get("keys", [])
+        self._keys = {key["kid"]: key for key in keys if key.get("kid")}
         self._expires_at = time.monotonic() + 300
         return self._keys
 
@@ -50,7 +51,8 @@ class OIDCVerifier:
                 key_data = (await self._jwks()).get(kid)
             if key_data is None:
                 raise ValueError("unknown_signing_key")
-            key = jwt.algorithms.ECAlgorithm.from_jwk(key_data) if algorithm.startswith("ES") else jwt.algorithms.RSAAlgorithm.from_jwk(key_data)
+            key = (jwt.algorithms.ECAlgorithm.from_jwk(key_data)
+                   if algorithm.startswith("ES") else jwt.algorithms.RSAAlgorithm.from_jwk(key_data))
             options = {"require": ["exp", "iat", "sub"]}
             kwargs: dict[str, Any] = {"algorithms": [algorithm], "options": options}
             if self.issuer:
@@ -90,13 +92,15 @@ async def require_principal(
     x_tenant_id: str | None = Header(default=None),
     x_actor: str | None = Header(default=None),
 ) -> RequestPrincipal:
-    mode = os.getenv("AUTH_MODE", "development").lower()
-    if mode == "development":
+    mode = os.getenv("AUTH_MODE", "oidc").lower()
+    if mode != "oidc":
+        if mode != "development":
+            raise HTTPException(status_code=503, detail="unsupported_auth_mode")
+        if os.getenv("ENVIRONMENT", "production").lower() == "production":
+            raise HTTPException(status_code=503, detail="development_auth_disabled")
         if not x_tenant_id or not x_actor:
             raise HTTPException(status_code=401, detail="authentication_required")
         return RequestPrincipal(x_actor, x_tenant_id, frozenset({"developer", "approver", "admin"}))
-    if mode != "oidc":
-        raise HTTPException(status_code=503, detail="unsupported_auth_mode")
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="bearer_token_required")
     return await principal_from_token(authorization[7:].strip())
