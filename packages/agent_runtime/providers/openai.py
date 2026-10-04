@@ -3,7 +3,8 @@ from collections.abc import AsyncIterator
 
 import httpx
 
-from .base import HttpModelProvider, ProviderError
+from .base import ProviderError
+from .http import HttpModelProvider
 from packages.agent_runtime.models import (
     ModelRequest, ModelResponse, ModelStreamEvent, ToolCall
 )
