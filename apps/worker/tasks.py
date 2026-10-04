@@ -31,11 +31,12 @@ except RuntimeError:
 
 async def emit(redis, run_id, event_type, **payload):
     tenant_id = payload.pop("_tenant_id", None)
-    event = {"type": event_type, "run_id": run_id, **redact_value(payload)}
+    safe_payload = redact_value(payload)
+    event = {"type": event_type, "run_id": run_id, **safe_payload}
     if tenant_id:
         async with SessionLocal() as event_session:
             await append_event(event_session, tenant_id=tenant_id, run_id=UUID(run_id),
-                               event_type=event_type, actor="system", payload=payload)
+                               event_type=event_type, actor="system", payload=safe_payload)
     await redis.publish(f"run:{run_id}", json.dumps(event, separators=(",", ":")))
 
 class DurableTask(Task):
