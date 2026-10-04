@@ -1,3 +1,5 @@
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 -- 002: approval action binding and decision history
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
