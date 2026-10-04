@@ -1,4 +1,5 @@
 from typing import Any
+import os
 from packages.tools.contracts import ToolAdapter,ToolContext,ToolSecurity
 
 class ExternalBoundaryAdapter(ToolAdapter):
@@ -15,6 +16,10 @@ EXTERNAL_TOOL_REGISTRY={
 
 def register_external_boundaries(registry, *, exclude: set[str] | None = None):
     exclude = exclude or set()
+    # Placeholder boundaries are intentionally not executable. Production agents must
+    # only see adapters with a real implementation and credential boundary.
+    if os.getenv("ENABLE_PLACEHOLDER_TOOLS", "false").lower() not in {"1", "true", "yes"}:
+        return
     for name,label in EXTERNAL_TOOL_REGISTRY.items():
         if name in exclude:
             continue
