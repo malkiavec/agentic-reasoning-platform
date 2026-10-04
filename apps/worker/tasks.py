@@ -131,11 +131,12 @@ async def _execute_run(task, run_id: str) -> dict:
 
                 if not result.get("ok", False):
                     checkpoint.results[raw["id"]] = result
-                    checkpoint.state = RunState.FAILED
-                    await update_run(session, UUID(run_id), state="failed", checkpoint=checkpoint.as_dict())
+                    recovery = result.get("error") == "action_recovery_required"
+                    checkpoint.state = RunState.RECOVERY_REQUIRED if recovery else RunState.FAILED
+                    await update_run(session, UUID(run_id), state="recovery_required" if recovery else "failed", checkpoint=checkpoint.as_dict())
                     await emit(redis, run_id, "step.failed", step_id=raw["id"], error=result.get("error"),
                                _tenant_id=record.tenant_id)
-                    return {"run_id": run_id, "state": "failed", "error": result.get("error")}
+                    return {"run_id": run_id, "state": "recovery_required" if recovery else "failed", "error": result.get("error")}
 
                 checkpoint.results[raw["id"]] = result
                 checkpoint.completed_steps.append(raw["id"])
