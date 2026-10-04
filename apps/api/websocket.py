@@ -14,7 +14,7 @@ async def stream_run(websocket: WebSocket, run_id: UUID):
     await websocket.accept()
     redis=Redis.from_url(os.getenv("REDIS_URL","redis://redis:6379/0"),decode_responses=False)
     try:
-        tenant_id=websocket.query_params.get("tenant_id")
+        tenant_id=websocket.headers.get("x-tenant-id")
         if not tenant_id:
             await websocket.close(code=4401)
             return
