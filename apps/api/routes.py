@@ -38,16 +38,18 @@ async def cancel_run(run_id: UUID, principal: RequestPrincipal = Depends(require
         return {"run_id": str(run_id), "state": "cancel_requested"}
 
 @router.post("/admin/kill-switch")
-async def set_kill_switch(enabled: bool = True, tenant_id: str | None = None,
+async def set_kill_switch(enabled: bool = True, tenant_id: str | None = None, global_scope: bool = False,
                           principal: RequestPrincipal = Depends(require_principal)):
     if "admin" not in principal.roles:
         raise HTTPException(403, "admin_role_required")
-    target = tenant_id or principal.tenant_id
-    if tenant_id is not None and "admin" not in principal.roles:
+    if global_scope and tenant_id is not None:
+        raise HTTPException(400, "global_and_tenant_scope_conflict")
+    if tenant_id is not None and tenant_id != principal.tenant_id:
         raise HTTPException(403, "cross_tenant_kill_switch_forbidden")
+    target = None if global_scope else (tenant_id or principal.tenant_id)
     switch = KillSwitch()
     if enabled:
         await switch.activate(target)
     else:
         await switch.deactivate(target)
-    return {"enabled": enabled, "tenant_id": target}
+    return {"enabled": enabled, "scope": "global" if global_scope else "tenant", "tenant_id": target}
