@@ -46,6 +46,7 @@ class AuditEvent(Base):
 
 class ToolActionRecord(Base):
     __tablename__ = "tool_action_records"
+    __table_args__ = (UniqueConstraint("tenant_id", "action_id", name="uq_tool_action_tenant_action"),)
     id: Mapped[UUID] = mapped_column(primary_key=True)
     tenant_id: Mapped[str] = mapped_column(String(128), index=True)
     run_id: Mapped[UUID | None] = mapped_column(index=True, nullable=True)
