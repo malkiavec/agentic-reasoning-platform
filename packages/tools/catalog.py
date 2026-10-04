@@ -1,6 +1,8 @@
 from packages.tools.builtins import ApprovalProbeAdapter, EchoAdapter
 from packages.tools.external import register_external_boundaries
 from packages.tools.http_rest import HttpRestAdapter
+from packages.tools.web_search import WebSearchAdapter
+from packages.tools.github import GitHubAdapter, GitHubWriteAdapter
 from packages.tools.registry import ToolRegistry, ToolSpec
 
 def build_default_registry() -> ToolRegistry:
@@ -32,6 +34,39 @@ def build_default_registry() -> ToolRegistry:
         ApprovalProbeAdapter(),
     )
     register_external_boundaries(registry)
+    registry.register_external(
+        "web.search", "Search the public web through the configured search provider",
+        WebSearchAdapter(),
+        input_schema={"type": "object", "properties": {
+            "query": {"type": "string", "minLength": 1, "maxLength": 2000},
+            "count": {"type": "integer", "minimum": 1, "maximum": 20},
+        }, "required": ["query"], "additionalProperties": False},
+    )
+    registry.register_external(
+        "github", "Read GitHub repositories, files, issues, and code",
+        GitHubAdapter(),
+        input_schema={"type": "object", "properties": {
+            "action": {"type": "string", "enum": ["get_repository", "list_issues", "get_file", "search_code"]},
+            "owner": {"type": "string", "maxLength": 100},
+            "repo": {"type": "string", "maxLength": 100},
+            "path": {"type": "string", "maxLength": 1000},
+            "ref": {"type": "string", "maxLength": 256},
+            "query": {"type": "string", "maxLength": 1000},
+            "state": {"type": "string", "enum": ["open", "closed", "all"]},
+            "per_page": {"type": "integer", "minimum": 1, "maximum": 100},
+        }, "required": ["action"], "additionalProperties": False},
+    )
+    registry.register_external(
+        "github.write", "Write to GitHub; always requires human approval",
+        GitHubWriteAdapter(),
+        input_schema={"type": "object", "properties": {
+            "owner": {"type": "string", "maxLength": 100},
+            "repo": {"type": "string", "maxLength": 100},
+            "method": {"type": "string", "enum": ["POST", "PATCH", "PUT", "DELETE"]},
+            "path": {"type": "string", "maxLength": 1000},
+            "body": {},
+        }, "required": ["owner", "repo", "method", "path"], "additionalProperties": False},
+    )
     registry.register_external(
         "http.rest",
         "Perform an outbound HTTP request through the SSRF and egress boundary",
