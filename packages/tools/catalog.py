@@ -1,5 +1,6 @@
 from packages.tools.builtins import ApprovalProbeAdapter, EchoAdapter
 from packages.tools.external import register_external_boundaries
+from packages.tools.http_rest import HttpRestAdapter
 from packages.tools.registry import ToolRegistry, ToolSpec
 
 def build_default_registry() -> ToolRegistry:
@@ -31,6 +32,24 @@ def build_default_registry() -> ToolRegistry:
         ApprovalProbeAdapter(),
     )
     register_external_boundaries(registry)
+    registry.register_external(
+        "http.rest",
+        "Perform an outbound HTTP request through the SSRF and egress boundary",
+        HttpRestAdapter(),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "method": {"type": "string", "enum": ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"]},
+                "url": {"type": "string", "maxLength": 2048},
+                "headers": {"type": "object", "additionalProperties": {"type": "string"}},
+                "json": {},
+                "timeout_seconds": {"type": "number", "minimum": 0.1, "maximum": 20},
+            },
+            "required": ["url"],
+            "additionalProperties": False,
+        },
+        permissions=frozenset({"network.egress"}),
+    )
     return registry
 
 EXTERNAL_TOOL_FAMILIES = (
