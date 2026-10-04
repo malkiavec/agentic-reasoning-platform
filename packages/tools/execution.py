@@ -92,6 +92,7 @@ class ToolExecutor:
             await redis.ping()
         except Exception:
             if redis is not None:
+                if redis is not None:
                 await redis.aclose()
             if os.getenv("APP_ENV", "production").lower() in {"production", "prod"}:
                 return ExecutionResult(False, error="security_dependency_unavailable", action_id=action_id)
