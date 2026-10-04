@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
-from sqlalchemy import DateTime, Integer, JSON, String, Text
+from sqlalchemy import DateTime, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 class Base(DeclarativeBase):
@@ -8,6 +8,7 @@ class Base(DeclarativeBase):
 
 class RunRecord(Base):
     __tablename__ = "runs"
+    __table_args__ = (UniqueConstraint("tenant_id", "idempotency_key", name="uq_runs_tenant_idempotency"),)
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     tenant_id: Mapped[str] = mapped_column(String(128), index=True)
     state: Mapped[str] = mapped_column(String(32), default="created", index=True)
