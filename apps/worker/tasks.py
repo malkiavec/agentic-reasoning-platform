@@ -16,12 +16,15 @@ from packages.security.policy import PolicyEngine
 from .celery_app import celery_app
 
 REDIS_URL=os.getenv("REDIS_URL","redis://redis:6379/0")
-registry=ToolRegistry()
-gateway=ModelGateway(ModelRouter([ModelRoute(
-    provider="mock", model="reasoning-default", max_context_tokens=1_000_000,
-    capabilities=frozenset({"reasoning","structured_output"})
-)]))
-gateway.register("mock", MockProvider())
+from packages.tools.catalog import build_default_registry
+registry=build_default_registry()
+try:
+    gateway=build_gateway_from_env()
+except RuntimeError:
+    from packages.agent_runtime.gateway import MockProvider, ModelGateway
+    from packages.agent_runtime.routing import ModelRoute, ModelRouter
+    gateway=ModelGateway(ModelRouter([ModelRoute("mock","reasoning-default",1_000_000,frozenset({"reasoning","structured_output"}))]))
+    gateway.register("mock",MockProvider())
 
 async def emit(redis,run_id,event_type,**payload):
     tenant_id=payload.pop("_tenant_id",None)
