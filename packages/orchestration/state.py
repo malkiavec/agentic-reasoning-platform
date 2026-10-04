@@ -10,6 +10,7 @@ class RunState(StrEnum):
     WAITING_APPROVAL="waiting_approval"
     COMPLETED="completed"
     FAILED="failed"
+    RECOVERY_REQUIRED="recovery_required"
     CANCELLED="cancelled"
 
 @dataclass
