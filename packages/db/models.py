@@ -42,3 +42,18 @@ class AuditEvent(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
+
+
+class ToolActionRecord(Base):
+    __tablename__ = "tool_action_records"
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String(128), index=True)
+    run_id: Mapped[UUID | None] = mapped_column(index=True, nullable=True)
+    action_id: Mapped[str] = mapped_column(String(64))
+    tool: Mapped[str] = mapped_column(String(256))
+    status: Mapped[str] = mapped_column(String(32), index=True)
+    idempotent: Mapped[bool] = mapped_column(default=True)
+    output: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
