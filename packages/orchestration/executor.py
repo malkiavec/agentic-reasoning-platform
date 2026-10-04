@@ -11,30 +11,38 @@ class StepResult:
     error: str | None = None
 
 class PlanExecutor:
-    """Bounded concurrent execution with deterministic result ordering."""
+    """Dependency-aware bounded executor with deterministic ready-batch scheduling."""
 
-    def __init__(
-        self,
-        step_handler: Callable[[Any], Awaitable[StepResult]],
-        max_concurrency: int = 8,
-    ):
+    def __init__(self, step_handler: Callable[[Any], Awaitable[StepResult]], max_concurrency: int = 8):
         self.step_handler = step_handler
         self.max_concurrency = max(1, max_concurrency)
 
     async def execute(self, steps: list[Any]) -> list[StepResult]:
-        groups: dict[str, list[Any]] = {}
-        for step in steps:
-            groups.setdefault(
-                step.parallel_group or f"serial:{step.id}", []
-            ).append(step)
-
-        results: list[StepResult] = []
-        for group in groups.values():
-            sem = asyncio.Semaphore(self.max_concurrency)
-
-            async def run_one(step: Any) -> StepResult:
-                async with sem:
-                    return await self.step_handler(step)
-
-            results.extend(await asyncio.gather(*(run_one(step) for step in group)))
-        return results
+        by_id = {step.id: step for step in steps}
+        if len(by_id) != len(steps):
+            raise ValueError("duplicate_step_id")
+        deps = {step.id: set(getattr(step, "depends_on", None) or []) for step in steps}
+        unknown = {d for values in deps.values() for d in values if d not in by_id}
+        if unknown:
+            raise ValueError("unknown_step_dependency")
+        completed: dict[str, StepResult] = {}
+        pending = set(by_id)
+        while pending:
+            ready = sorted(i for i in pending if deps[i].issubset(completed))
+            if not ready:
+                raise ValueError("cyclic_or_blocked_dependencies")
+            batch = ready[:self.max_concurrency]
+            results = await asyncio.gather(*(self.step_handler(by_id[i]) for i in batch))
+            for result in results:
+                completed[result.step_id] = result
+                pending.remove(result.step_id)
+            if any(not r.ok for r in results):
+                changed = True
+                while changed:
+                    changed = False
+                    for i in list(pending):
+                        if any(d in completed and not completed[d].ok for d in deps[i]):
+                            completed[i] = StepResult(i, False, error="dependency_failed")
+                            pending.remove(i)
+                            changed = True
+        return [completed[s.id] for s in steps]
