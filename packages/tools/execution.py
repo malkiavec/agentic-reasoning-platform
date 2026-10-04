@@ -59,7 +59,7 @@ class ToolExecutor:
         if spec.allowed_agents is not None and actor not in spec.allowed_agents:
             return ExecutionResult(False, error="tool_actor_not_allowed")
 
-        decision = self.policy.evaluate(Action(tool=tool_name, arguments=arguments, actor=actor, tenant_id=tenant_id))
+        decision = self.policy.evaluate(\n            Action(tool=tool_name, arguments=arguments, actor=actor, tenant_id=tenant_id),\n            registered_tools=frozenset(spec.name for spec in self.registry.list()),\n        )
         if not decision.allowed:
             return ExecutionResult(False, error=decision.reason)
 
