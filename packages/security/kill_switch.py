@@ -13,6 +13,10 @@ class KillSwitch:
         try:
             values = await redis.mget("agent:kill:global", f"agent:kill:tenant:{tenant_id}")
             return any(values)
+        except Exception:
+            if os.getenv("APP_ENV", "production").lower() in {"production", "prod"}:
+                return True
+            return False
         finally:
             await redis.aclose()
 
