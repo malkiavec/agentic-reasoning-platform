@@ -1,5 +1,6 @@
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Response
+from prometheus_client import CONTENT_TYPE_LATEST, Gauge, generate_latest
 from packages.observability.metrics import RunMetrics
 from packages.db.session import SessionLocal
 from packages.db.repository import get_run, update_run
@@ -7,7 +8,6 @@ from apps.api.auth import RequestPrincipal, require_principal
 
 router=APIRouter(prefix="/v1")
 metrics = RunMetrics()
-from prometheus_client import CONTENT_TYPE_LATEST, Gauge, generate_latest
 PROM_GAUGES = {
     name: Gauge(f"agent_{name}", f"Agent platform {name}")
     for name in ("completed_runs", "failed_runs", "input_tokens", "output_tokens", "tool_calls")
