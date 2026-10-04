@@ -3,6 +3,7 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from .models import AuditEvent, RunRecord
+from packages.security.redaction import redact_value
 
 async def create_run(session: AsyncSession, **values) -> RunRecord:
     # Idempotency is tenant-scoped at the API boundary; unique DB key prevents duplicates.
@@ -25,6 +26,8 @@ async def update_run(session: AsyncSession, run_id: UUID, **values) -> None:
     await session.commit()
 
 async def audit(session: AsyncSession, **values) -> AuditEvent:
+    if "payload" in values:
+        values["payload"] = redact_value(values["payload"])
     event = AuditEvent(**values)
     session.add(event)
     await session.commit()
