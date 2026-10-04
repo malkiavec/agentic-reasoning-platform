@@ -30,13 +30,21 @@ class PolicyEngine:
     _medium_prefixes = ("http.", "webhook", "database.", "git.", "slack.", "gmail.", "drive.")
     _max_argument_bytes = 256 * 1024
 
-    def evaluate(self, action: Action) -> Decision:
+    def evaluate(
+        self,
+        action: Action,
+        *,
+        registered_tools: frozenset[str] | None = None,
+    ) -> Decision:
         if not action.tool or not action.tenant_id or not action.actor:
             return Decision(False, Risk.CRITICAL, False, "missing_security_context")
 
         tool = action.tool.strip().lower()
         if not tool:
             return Decision(False, Risk.CRITICAL, False, "invalid_tool")
+
+        if registered_tools is not None and tool not in registered_tools:
+            return Decision(False, Risk.CRITICAL, False, "tool_not_registered")
 
         if tool.startswith(self._blocked_prefixes):
             return Decision(False, Risk.CRITICAL, False, "restricted_tool")
