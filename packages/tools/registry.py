@@ -18,8 +18,13 @@ class ToolRegistry:
             raise ValueError(f"tool already registered: {spec.name}")
         self._tools[spec.name] = (spec, handler)
 
-    def get(self, name: str) -> ToolSpec:
-        return self._tools[name][0]
+    def get(self, name: str) -> ToolSpec | None:
+        item = self._tools.get(name)
+        return item[0] if item else None
+
+    def handler(self, name: str) -> Callable[..., Any] | None:
+        item = self._tools.get(name)
+        return item[1] if item else None
 
     def list(self) -> list[ToolSpec]:
         return [x[0] for x in self._tools.values()]
