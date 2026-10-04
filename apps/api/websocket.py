@@ -5,6 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from redis.asyncio import Redis
 
+from packages.api.auth import principal_from_token
 from packages.db.event_history import replay_events
 from packages.db.repository import get_run
 from packages.db.session import SessionLocal
@@ -20,10 +21,18 @@ async def stream_run(websocket: WebSocket, run_id: UUID):
     )
     pubsub = redis.pubsub()
     try:
-        tenant_id = websocket.headers.get("x-tenant-id")
-        if not tenant_id:
-            await websocket.close(code=4401)
-            return
+        if os.getenv("AUTH_MODE", "development").lower() == "oidc":
+            authorization = websocket.headers.get("authorization", "")
+            if not authorization.startswith("Bearer "):
+                await websocket.close(code=4401)
+                return
+            principal = await principal_from_token(authorization[7:].strip())
+            tenant_id = principal.tenant_id
+        else:
+            tenant_id = websocket.headers.get("x-tenant-id")
+            if not tenant_id:
+                await websocket.close(code=4401)
+                return
 
         # Subscribe before replay so events cannot be lost between the two operations.
         await pubsub.subscribe(f"run:{run_id}")
