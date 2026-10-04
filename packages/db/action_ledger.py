@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from packages.db.models import ToolActionRecord
 
@@ -17,8 +18,20 @@ async def begin_action(session: AsyncSession, *, tenant_id: str, run_id: UUID | 
                            action_id=action_id, tool=tool, status="in_progress",
                            idempotent=idempotent)
     session.add(row)
-    await session.commit()
-    return row
+    try:
+        await session.commit()
+        return row
+    except IntegrityError:
+        await session.rollback()
+        existing = await session.scalar(
+            select(ToolActionRecord).where(
+                ToolActionRecord.tenant_id == tenant_id,
+                ToolActionRecord.action_id == action_id,
+            )
+        )
+        if existing is None:
+            raise
+        return existing
 
 async def complete_action(session: AsyncSession, row: ToolActionRecord, output) -> None:
     row.status = "completed"
