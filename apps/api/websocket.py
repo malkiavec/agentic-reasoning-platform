@@ -5,7 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from redis.asyncio import Redis
 
-from packages.api.auth import principal_from_token
+from apps.api.auth import principal_from_token
 from packages.db.event_history import replay_events
 from packages.db.repository import get_run
 from packages.db.session import SessionLocal
