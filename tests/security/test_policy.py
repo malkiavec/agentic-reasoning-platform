@@ -17,3 +17,12 @@ def test_large_arguments_are_rejected():
     d = PolicyEngine().evaluate(Action("echo", {"payload": "x" * (256 * 1024)}, "actor", "tenant"))
     assert not d.allowed
     assert d.reason == "arguments_too_large"
+
+
+def test_registered_tool_boundary_denies_unknown_tool():
+    d = PolicyEngine().evaluate(
+        Action("unknown.tool", {}, "actor", "tenant"),
+        registered_tools=frozenset({"echo"}),
+    )
+    assert not d.allowed
+    assert d.reason == "tool_not_registered"
