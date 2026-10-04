@@ -16,7 +16,7 @@ class RunRecord(Base):
     reasoning_effort: Mapped[str] = mapped_column(String(32), default="medium")
     checkpoint: Mapped[dict] = mapped_column(JSON, default=dict)
     attempts: Mapped[int] = mapped_column(Integer, default=0)
-    idempotency_key: Mapped[str | None] = mapped_column(String(256), unique=True, nullable=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(256), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
