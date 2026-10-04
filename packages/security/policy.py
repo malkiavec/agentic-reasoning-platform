@@ -34,7 +34,7 @@ class PolicyEngine:
         self,
         action: Action,
         *,
-        registered_tools: frozenset[str] | None = None,
+        registered_tools: frozenset[str] = frozenset(),
     ) -> Decision:
         if not action.tool or not action.tenant_id or not action.actor:
             return Decision(False, Risk.CRITICAL, False, "missing_security_context")
