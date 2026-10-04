@@ -12,7 +12,24 @@ from apps.api.approvals import router as approval_router
 from apps.api.routes import router as api_router
 from apps.api.auth import RequestPrincipal, require_principal
 
+# Optional OpenTelemetry: disabled unless OTEL_EXPORTER_OTLP_ENDPOINT is configured.
+if os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT"):
+    from opentelemetry import trace
+    from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+    from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+    from opentelemetry.sdk.resources import Resource
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
+    _provider = TracerProvider(resource=Resource.create({"service.name": os.getenv("OTEL_SERVICE_NAME", "agentic-api")}))
+    _provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
+    trace.set_tracer_provider(_provider)
+
 app = FastAPI(title="Agentic Reasoning Platform API", version="0.4.0")
+if os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT"):
+    FastAPIInstrumentor.instrument_app(app)
+    SQLAlchemyInstrumentor().instrument()
 app.include_router(websocket_router)
 app.include_router(approval_router)
 app.include_router(api_router)
