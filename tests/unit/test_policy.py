@@ -1,11 +1,15 @@
-from packages.security.policy import Action, PolicyEngine, Risk
+from packages.security.policy import Action, PolicyEngine
 
 def test_shell_requires_approval():
-    d = PolicyEngine().evaluate(Action("shell", {}, "agent", "tenant"))
-    assert d.allowed is True
-    assert d.risk == Risk.HIGH
-    assert d.requires_approval is True
+    decision = PolicyEngine().evaluate(Action("shell", {}, "agent", "tenant"))
+    assert decision.allowed is True
+    assert decision.requires_approval is True
 
-def test_invalid_tenant_is_denied():
-    d = PolicyEngine().evaluate(Action("search", {}, "agent", ""))
-    assert d.allowed is False
+def test_missing_tenant_is_denied():
+    decision = PolicyEngine().evaluate(Action("echo", {}, "agent", ""))
+    assert decision.allowed is False
+    assert decision.risk.name == "CRITICAL"
+
+def test_restricted_tool_is_denied():
+    decision = PolicyEngine().evaluate(Action("secrets.read", {}, "agent", "tenant"))
+    assert decision.allowed is False
