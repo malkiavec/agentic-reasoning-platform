@@ -1,16 +1,16 @@
-import os
 from typing import Any
 
 import httpx
 
 from packages.tools.contracts import ToolAdapter, ToolContext, ToolSecurity
+from packages.security.credentials import credentials
 
 class GitHubAdapter(ToolAdapter):
     name = "github"
     security = ToolSecurity(risk="medium", timeout_seconds=20.0, idempotent=True)
 
     async def invoke(self, arguments: dict[str, Any], context: ToolContext) -> Any:
-        token = os.getenv("GITHUB_TOOL_TOKEN", "")
+        token = credentials.get(context.tenant_id, "github")
         if not token:
             raise RuntimeError("github_tool_token_not_configured")
         action = arguments["action"]
@@ -44,7 +44,7 @@ class GitHubWriteAdapter(GitHubAdapter):
     security = ToolSecurity(risk="high", requires_approval=True, timeout_seconds=20.0, idempotent=False)
 
     async def invoke(self, arguments: dict[str, Any], context: ToolContext) -> Any:
-        token = os.getenv("GITHUB_TOOL_TOKEN", "")
+        token = credentials.get(context.tenant_id, "github")
         if not token:
             raise RuntimeError("github_tool_token_not_configured")
         owner, repo = arguments["owner"], arguments["repo"]
