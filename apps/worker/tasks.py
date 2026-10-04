@@ -70,7 +70,11 @@ async def _execute_run(task,run_id:str)->dict:
                 if raw["tool"]=="__final__":
                     result={"output":raw["arguments"]["prompt"]}
                 else:
-                    result=(await executor.execute(raw["tool"],raw["arguments"],actor="agent",tenant_id=record.tenant_id,run_id=run_id)).__dict__
+                    prior=checkpoint.results.get(raw["id"], {})
+                    approved_id=prior.get("approval_id") if prior.get("status")=="approval_pending" else None
+                    result=(await executor.execute(raw["tool"],raw["arguments"],actor="agent",
+                        tenant_id=record.tenant_id,run_id=run_id,
+                        approved_approval_id=approved_id)).__dict__
 
                 if result.get("error")=="approval_pending":
                     checkpoint.state=RunState.WAITING_APPROVAL
