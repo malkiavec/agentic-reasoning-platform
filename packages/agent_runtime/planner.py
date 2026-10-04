@@ -12,6 +12,7 @@ class PlanStep(BaseModel):
     tool: str = Field(min_length=1, max_length=256)
     arguments: dict[str, Any] = Field(default_factory=dict)
     parallel_group: str | None = Field(default=None, max_length=128)
+    depends_on: list[str] = Field(default_factory=list, max_length=200)
 
 class AgentPlan(BaseModel):
     steps: list[PlanStep] = Field(min_length=1, max_length=200)
@@ -41,10 +42,12 @@ class StructuredPlanner:
             raise ValueError("plan_exceeds_max_steps")
 
         seen: set[str] = set()
+        deps: dict[str, set[str]] = {}
         for step in plan.steps:
             if step.id in seen:
                 raise ValueError("duplicate_plan_step_id")
             seen.add(step.id)
+            deps[step.id] = set(step.depends_on)
             if step.tool == "__final__":
                 if set(step.arguments) != {"prompt"} or not isinstance(step.arguments["prompt"], str):
                     raise ValueError("invalid_final_step")
@@ -54,6 +57,18 @@ class StructuredPlanner:
                 raise ValueError("model_selected_unregistered_tool")
             if list(Draft202012Validator(spec.input_schema).iter_errors(step.arguments)):
                 raise ValueError("model_generated_invalid_tool_arguments")
+
+        unknown = {d for values in deps.values() for d in values if d not in seen}
+        if unknown:
+            raise ValueError("plan_has_unknown_dependency")
+        pending = set(seen)
+        completed: set[str] = set()
+        while pending:
+            ready = {step_id for step_id in pending if deps[step_id].issubset(completed)}
+            if not ready:
+                raise ValueError("plan_dependency_cycle")
+            completed.update(ready)
+            pending.difference_update(ready)
         return plan.steps
 
     async def plan(self, prompt: str, *, model: str,
