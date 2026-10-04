@@ -7,6 +7,11 @@ from apps.api.auth import RequestPrincipal, require_principal
 
 router=APIRouter(prefix="/v1")
 metrics = RunMetrics()
+from prometheus_client import CONTENT_TYPE_LATEST, Gauge, generate_latest
+PROM_GAUGES = {
+    name: Gauge(f"agent_{name}", f"Agent platform {name}")
+    for name in ("completed_runs", "failed_runs", "input_tokens", "output_tokens", "tool_calls")
+}
 
 @router.get("/system/metrics")
 async def system_metrics():
@@ -14,7 +19,6 @@ async def system_metrics():
 
 @router.get("/metrics", include_in_schema=False)
 async def prometheus_metrics():
-    from prometheus_client import CONTENT_TYPE_LATEST, Gauge, generate_latest
     snapshot = metrics.snapshot()
     values = {
         "completed_runs": snapshot["completed_runs"],
@@ -24,7 +28,7 @@ async def prometheus_metrics():
         "tool_calls": snapshot["tool_calls"],
     }
     for name, value in values.items():
-        Gauge(f"agent_{name}", f"Agent platform {name}").set(value)
+        PROM_GAUGES[name].set(value)
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 @router.post("/runs/{run_id}/cancel")
