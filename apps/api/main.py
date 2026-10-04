@@ -39,10 +39,11 @@ app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True
 async def distributed_rate_limit(request: Request, call_next):
     if request.url.path in {"/health", "/ready", "/metrics"}:
         return await call_next(request)
-    redis = Redis.from_url(os.getenv("REDIS_URL", "redis://redis:6379/0"), decode_responses=True)
+    redis = None
     client = request.headers.get("x-forwarded-for", request.client.host if request.client else "unknown").split(",")[0].strip()
     key = f"agent:http:rate:{client}:{int(time.time() // 60)}"
     try:
+        redis = Redis.from_url(os.getenv("REDIS_URL", "redis://redis:6379/0"), decode_responses=True)
         count = await redis.incr(key)
         if count == 1:
             await redis.expire(key, 120)
@@ -85,6 +86,7 @@ async def health():
 
 @app.get("/ready")
 async def ready():
+    redis = None
     try:
         async with SessionLocal() as session:
             await session.execute(text("SELECT 1"))
