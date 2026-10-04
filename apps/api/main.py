@@ -1,6 +1,8 @@
 import os
 from uuid import UUID
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.responses import JSONResponse
 from redis.asyncio import Redis
 from sqlalchemy import text
 from pydantic import BaseModel, Field
@@ -27,6 +29,33 @@ if os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT"):
     trace.set_tracer_provider(_provider)
 
 app = FastAPI(title="Agentic Reasoning Platform API", version="0.4.0")
+origins = [item.strip() for item in os.getenv("CORS_ORIGINS", "").split(",") if item.strip()]
+app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True,
+                   allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+                   allow_headers=["Authorization", "Content-Type", "X-Request-ID"])
+
+@app.middleware("http")
+async def distributed_rate_limit(request: Request, call_next):
+    if request.url.path in {"/health", "/ready", "/metrics"}:
+        return await call_next(request)
+    redis = Redis.from_url(os.getenv("REDIS_URL", "redis://redis:6379/0"), decode_responses=True)
+    client = request.headers.get("x-forwarded-for", request.client.host if request.client else "unknown").split(",")[0].strip()
+    key = f"agent:http:rate:{client}:{int(__import__("time").time() // 60)}"
+    try:
+        count = await redis.incr(key)
+        if count == 1:
+            await redis.expire(key, 120)
+        limit = int(os.getenv("API_RATE_LIMIT_PER_MINUTE", "120"))
+        if count > limit:
+            return JSONResponse({"detail": "rate_limit_exceeded"}, status_code=429,
+                                headers={"Retry-After": "60"})
+        return await call_next(request)
+    except Exception as exc:
+        if os.getenv("APP_ENV", "production").lower() in {"production", "prod"}:
+            return JSONResponse({"detail": "rate_limit_dependency_unavailable"}, status_code=503)
+        return await call_next(request)
+    finally:
+        await redis.aclose()
 if os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT"):
     FastAPIInstrumentor.instrument_app(app)
     SQLAlchemyInstrumentor().instrument()
