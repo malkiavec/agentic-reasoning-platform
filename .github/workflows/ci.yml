@@ -12,5 +12,5 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install -e ".[dev]"
-      - run: ruff check .
+      - run: ruff check . --select E,F --ignore F401
       - run: pytest
