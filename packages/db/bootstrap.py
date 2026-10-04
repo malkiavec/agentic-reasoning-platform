@@ -1,10 +1,9 @@
-import asyncio
-from .models import Base
-from .session import engine
+from sqlalchemy.ext.asyncio import AsyncEngine
+from packages.db.models import Base
+from packages.db.memory_models import MemoryRecord
+from packages.db.approval_models import ApprovalRecord
 
-async def main() -> None:
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-if __name__ == "__main__":
-    asyncio.run(main())
+# Explicit imports above ensure every ORM model is registered before metadata creation.
+async def create_schema(engine: AsyncEngine) -> None:
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
