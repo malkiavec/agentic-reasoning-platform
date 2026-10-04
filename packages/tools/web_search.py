@@ -1,9 +1,9 @@
-import os
 from typing import Any
 
 import httpx
 
 from packages.tools.contracts import ToolAdapter, ToolContext, ToolSecurity
+from packages.security.credentials import credentials
 
 class WebSearchAdapter(ToolAdapter):
     name = "web.search"
@@ -13,7 +13,7 @@ class WebSearchAdapter(ToolAdapter):
         query = str(arguments["query"]).strip()
         if not query:
             raise ValueError("empty_search_query")
-        api_key = os.getenv("BRAVE_SEARCH_API_KEY", "")
+        api_key = credentials.get(context.tenant_id, "web.search")
         if not api_key:
             raise RuntimeError("search_provider_not_configured")
         count = min(max(int(arguments.get("count", 10)), 1), 20)
