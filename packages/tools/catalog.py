@@ -33,7 +33,7 @@ def build_default_registry() -> ToolRegistry:
         ),
         ApprovalProbeAdapter(),
     )
-    register_external_boundaries(registry)
+    register_external_boundaries(registry, exclude={"web.search", "github"})
     registry.register_external(
         "web.search", "Search the public web through the configured search provider",
         WebSearchAdapter(),
