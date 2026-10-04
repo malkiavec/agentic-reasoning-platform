@@ -96,6 +96,6 @@ class ToolExecutor:
             return ExecutionResult(False, error="tool_timeout")
         except asyncio.CancelledError:
             raise
-        except RuntimeError as exc:
+        except Exception as exc:  # noqa: BLE001 - adapter failures are normalized at the boundary.
             return ExecutionResult(False, error=f"tool_error:{type(exc).__name__}")
         return ExecutionResult(True, output=value, approval_id=approved_approval_id)
