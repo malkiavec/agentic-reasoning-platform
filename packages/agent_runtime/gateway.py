@@ -22,7 +22,7 @@ class ModelGateway:
         last=None
         for name in (route.provider,*route.fallback_providers):
             try: return await self.provider(name).generate(request.model_copy(update={"model":route.model}))
-            except ProviderError as exc:
+            except (ProviderError, ValueError) as exc:
                 last=exc
-                if not exc.retryable: break
+                if isinstance(exc, ProviderError) and not exc.retryable: break
         raise RuntimeError("all_model_providers_failed") from last
