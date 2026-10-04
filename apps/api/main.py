@@ -51,12 +51,14 @@ async def distributed_rate_limit(request: Request, call_next):
             return JSONResponse({"detail": "rate_limit_exceeded"}, status_code=429,
                                 headers={"Retry-After": "60"})
         return await call_next(request)
-    except Exception as exc:
+    except Exception:
         if os.getenv("APP_ENV", "production").lower() in {"production", "prod"}:
             return JSONResponse({"detail": "rate_limit_dependency_unavailable"}, status_code=503)
         return await call_next(request)
     finally:
-        await redis.aclose()
+        if redis is not None:
+            await redis.aclose()
+
 if os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT"):
     FastAPIInstrumentor.instrument_app(app)
     SQLAlchemyInstrumentor().instrument()
@@ -90,7 +92,8 @@ async def ready():
         try:
             await redis.ping()
         finally:
-            await redis.aclose()
+            if redis is not None:
+                await redis.aclose()
     except Exception as exc:
         raise HTTPException(status_code=503, detail="dependencies_unready") from exc
     return {"status": "ready"}
