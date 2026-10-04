@@ -43,7 +43,7 @@ class PlanExecutor:
             await asyncio.sleep(self.retry_backoff_seconds * (2 ** (attempts - 1)))
         return StepResult(step.id, False, error="step_retry_exhausted", attempts=attempts)
 
-    async def execute(self, steps: list[Any]) -> list[StepResult]:
+    async def execute(\n        self,\n        steps: list[Any],\n        *,\n        checkpoint: dict[str, Any] | None = None,\n        deadline_seconds: float | None = None,\n    ) -> list[StepResult]:
         if len(steps) > self.max_total_steps:
             raise ValueError("step_budget_exceeded")
         by_id = {step.id: step for step in steps}
