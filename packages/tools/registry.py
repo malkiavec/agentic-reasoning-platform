@@ -22,3 +22,6 @@ class ToolRegistry:
     def adapter(self,name):
         item=self._tools.get(name); return item[1] if item else None
     def list(self): return [x[0] for x in self._tools.values()]
+    def register_external(self,name,description,adapter):
+        schema={"type":"object","additionalProperties":True}
+        self.register(ToolSpec(name,description,schema,security=adapter.security),adapter)
