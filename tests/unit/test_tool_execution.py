@@ -17,3 +17,16 @@ async def test_shell_is_blocked_for_approval():
     registry.register(ToolSpec("shell", "Shell", {"type": "object"}), lambda: "bad")
     result = await ToolExecutor(registry, PolicyEngine()).execute("shell", {}, actor="test", tenant_id="t1")
     assert not result.ok and result.error == "approval_required"
+
+
+@pytest.mark.asyncio
+async def test_unregistered_tool_is_denied_before_execution():
+    registry = ToolRegistry()
+    registry.register(
+        ToolSpec("echo", "Echo", {"type": "object"}),
+        lambda: "ok",
+    )
+    result = await ToolExecutor(registry, PolicyEngine()).execute(
+        "unknown.tool", {}, actor="test", tenant_id="t1"
+    )
+    assert not result.ok and result.error == "tool_not_registered"
