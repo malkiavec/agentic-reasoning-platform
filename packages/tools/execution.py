@@ -54,7 +54,7 @@ class ToolExecutor:
         needs_approval = decision.requires_approval or spec.requires_approval
         if needs_approval and approved_approval_id is None:
             if self.approval_service is None or run_id is None:
-                return ExecutionResult(False, error="approval_service_unavailable")
+                return ExecutionResult(False, error="approval_required")
             approval = await self.approval_service.request(
                 run_id=run_id,
                 tenant_id=tenant_id,
