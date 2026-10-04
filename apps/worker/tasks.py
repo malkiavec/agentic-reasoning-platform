@@ -47,25 +47,25 @@ async def _execute_run(task,run_id:str)->dict:
             if checkpoint.state in {RunState.COMPLETED,RunState.CANCELLED}: return {"run_id":run_id,"state":checkpoint.state.value}
 
             if checkpoint.state != RunState.WAITING_APPROVAL:
-            verdict=InputGuardrail().check(record.prompt)
-            if not verdict.allowed:
-                checkpoint.state=RunState.FAILED; checkpoint.results["error"]="input_guardrail_blocked"
-                await update_run(session,UUID(run_id),state="failed",checkpoint=checkpoint.as_dict())
-                await audit(session,tenant_id=record.tenant_id,run_id=UUID(run_id),event_type="guardrail.blocked",actor="system",payload={"findings":verdict.findings})
-                await emit(redis,run_id,"run.failed",reason="input_guardrail_blocked"); return {"run_id":run_id,"state":"failed"}
+                verdict=InputGuardrail().check(record.prompt)
+                if not verdict.allowed:
+                    checkpoint.state=RunState.FAILED; checkpoint.results["error"]="input_guardrail_blocked"
+                    await update_run(session,UUID(run_id),state="failed",checkpoint=checkpoint.as_dict())
+                    await audit(session,tenant_id=record.tenant_id,run_id=UUID(run_id),event_type="guardrail.blocked",actor="system",payload={"findings":verdict.findings})
+                    await emit(redis,run_id,"run.failed",reason="input_guardrail_blocked"); return {"run_id":run_id,"state":"failed"}
 
-            await update_run(session,UUID(run_id),state="planning"); await emit(redis,run_id,"run.planning")
-            if not checkpoint.plan:
-                max_steps=int((record.checkpoint or {}).get("max_steps",20))
-                try:
-                    steps=await StructuredPlanner(gateway,registry).plan(
-                        record.prompt,model=record.model,
-                        reasoning_effort=record.reasoning_effort,max_steps=max_steps)
-                except ValueError:
-                    steps=Planner().plan(record.prompt,max_steps)
-                checkpoint.plan=[{"id":s.id,"tool":s.tool,"arguments":s.arguments,"parallel_group":s.parallel_group}
-                                 for s in steps]
-                await update_run(session,UUID(run_id),checkpoint=checkpoint.as_dict())
+                await update_run(session,UUID(run_id),state="planning"); await emit(redis,run_id,"run.planning")
+                if not checkpoint.plan:
+                    max_steps=int((record.checkpoint or {}).get("max_steps",20))
+                    try:
+                        steps=await StructuredPlanner(gateway,registry).plan(
+                            record.prompt,model=record.model,
+                            reasoning_effort=record.reasoning_effort,max_steps=max_steps)
+                    except ValueError:
+                        steps=Planner().plan(record.prompt,max_steps)
+                    checkpoint.plan=[{"id":s.id,"tool":s.tool,"arguments":s.arguments,"parallel_group":s.parallel_group}
+                                     for s in steps]
+                    await update_run(session,UUID(run_id),checkpoint=checkpoint.as_dict())
 
             approval_service=PersistentApprovalService(SessionLocal)
             executor=ToolExecutor(registry,PolicyEngine(),approval_service)
