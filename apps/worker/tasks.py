@@ -6,8 +6,7 @@ from packages.db.repository import get_run, update_run, audit
 from packages.db.event_history import append_event
 from packages.db.session import SessionLocal
 from packages.agent_runtime.planner import Planner, StructuredPlanner
-from packages.agent_runtime.gateway import MockProvider, ModelGateway
-from packages.agent_runtime.routing import ModelRoute, ModelRouter
+from packages.agent_runtime.provider_factory import build_gateway_from_env
 from packages.guardrails.input import InputGuardrail
 from packages.orchestration.state import Checkpoint, RunState
 from packages.tools.registry import ToolRegistry, ToolSpec
