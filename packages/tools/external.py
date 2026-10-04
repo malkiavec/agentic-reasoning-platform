@@ -10,7 +10,7 @@ class ExternalBoundaryAdapter(ToolAdapter):
 EXTERNAL_TOOL_REGISTRY={
     "web.search":"Web / Search","browser":"Browser","computer_use":"Computer Use","github":"GitHub","gitlab":"GitLab",
     "slack":"Slack","discord":"Discord","gmail":"Gmail","google_drive":"Google Drive","notion":"Notion",
-    "linear":"Linear","jira":"Jira","databases":"Databases","http.rest":"HTTP / REST APIs","webhooks":"Webhooks","mcp":"Custom MCP / API tools",
+    "linear":"Linear","jira":"Jira","databases":"Databases","webhooks":"Webhooks","mcp":"Custom MCP / API tools",
 }
 
 def register_external_boundaries(registry):
