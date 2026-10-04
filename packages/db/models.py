@@ -1,0 +1,30 @@
+from datetime import datetime, timezone
+from uuid import UUID, uuid4
+from sqlalchemy import DateTime, Integer, JSON, String, Text
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+class Base(DeclarativeBase):
+    pass
+
+class RunRecord(Base):
+    __tablename__ = "runs"
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    tenant_id: Mapped[str] = mapped_column(String(128), index=True)
+    state: Mapped[str] = mapped_column(String(32), default="created", index=True)
+    prompt: Mapped[str] = mapped_column(Text)
+    model: Mapped[str] = mapped_column(String(256), default="reasoning-default")
+    reasoning_effort: Mapped[str] = mapped_column(String(32), default="medium")
+    checkpoint: Mapped[dict] = mapped_column(JSON, default=dict)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+class AuditEvent(Base):
+    __tablename__ = "audit_events"
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    tenant_id: Mapped[str] = mapped_column(String(128), index=True)
+    run_id: Mapped[UUID | None] = mapped_column(index=True, nullable=True)
+    event_type: Mapped[str] = mapped_column(String(128), index=True)
+    actor: Mapped[str] = mapped_column(String(256))
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
