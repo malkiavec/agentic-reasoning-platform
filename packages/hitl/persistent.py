@@ -14,7 +14,8 @@ def action_hash(tool: str, arguments: dict) -> str:
     return hashlib.sha256(canonical_action(tool, arguments).encode()).hexdigest()
 
 async def create_approval(session: AsyncSession, **values) -> ApprovalRecord:
-    record = ApprovalRecord(**values)
+    required = max(1, int(values.get("required_approvers", 1)))
+    record = ApprovalRecord(**{**values, "required_approvers": required})
     session.add(record)
     await session.commit()
     await session.refresh(record)
@@ -31,10 +32,13 @@ async def decide_approval(
     actor: str | None = None,
     comment: str = "",
 ) -> ApprovalRecord | None:
-    record = await get_approval(session, approval_id)
-    if record is None or record.status != "pending":
-        return None
     if not actor:
+        return None
+    # Lock the approval row so concurrent approvers cannot double-count a quorum.
+    record = await session.scalar(
+        select(ApprovalRecord).where(ApprovalRecord.id == approval_id).with_for_update()
+    )
+    if record is None or record.status != "pending":
         return None
 
     now = datetime.now(timezone.utc)
@@ -50,19 +54,18 @@ async def decide_approval(
     if existing is not None:
         return None
 
-    decision = ApprovalDecisionRecord(
+    session.add(ApprovalDecisionRecord(
         approval_id=approval_id,
         tenant_id=record.tenant_id,
         approver_subject=actor,
         decision="approved" if approved else "rejected",
         comment=comment[:4000],
-    )
-    session.add(decision)
+    ))
     if not approved:
         record.status = "rejected"
     else:
         record.approvals_received += 1
-        if record.approvals_received >= record.required_approvers:
+        if record.approvals_received >= max(1, record.required_approvers):
             record.status = "approved"
     await session.commit()
     await session.refresh(record)
