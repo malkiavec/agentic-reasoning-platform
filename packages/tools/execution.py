@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 from jsonschema import Draft202012Validator
 from packages.security.policy import Action, PolicyEngine
 
@@ -27,7 +27,7 @@ class ToolExecutor:
             return ExecutionResult(False, error=decision.reason)
         if decision.requires_approval or spec.requires_approval:
             return ExecutionResult(False, error="approval_required")
-        handler: Callable[..., Any] = getattr(spec, "handler", None)
+        handler = self.registry.handler(tool_name)
         if handler is None:
             return ExecutionResult(False, error="tool_handler_unavailable")
         value = handler(**arguments)
