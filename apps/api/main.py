@@ -1,5 +1,6 @@
 from uuid import UUID
 from fastapi import Depends, FastAPI, HTTPException
+from redis.asyncio import Redis
 from pydantic import BaseModel, Field
 from packages.db.repository import create_run, get_run
 from packages.db.session import SessionLocal
@@ -30,6 +31,20 @@ class RunResponse(BaseModel):
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+@app.get("/ready")
+async def ready():
+    try:
+        async with SessionLocal() as session:
+            await session.execute(__import__("sqlalchemy").text("SELECT 1"))
+        redis = Redis.from_url(__import__("os").getenv("REDIS_URL", "redis://redis:6379/0"))
+        try:
+            await redis.ping()
+        finally:
+            await redis.aclose()
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="dependencies_unready") from exc
+    return {"status": "ready"}
 
 @app.post("/v1/runs", response_model=RunResponse)
 async def create_agent_run(request: RunRequest, principal: RequestPrincipal = Depends(require_principal)):
