@@ -104,7 +104,12 @@ class PlanExecutor:
                 results = await asyncio.gather(*coroutines)
             else:
                 remaining = max(0.001, deadline - asyncio.get_running_loop().time())
-                results = await asyncio.wait_for(asyncio.gather(*coroutines), timeout=remaining)
+                try:
+                    results = await asyncio.wait_for(
+                        asyncio.gather(*coroutines), timeout=remaining
+                    )
+                except TimeoutError as exc:
+                    raise TimeoutError("run_deadline_exceeded") from exc
             for result in results:
                 completed[result.step_id] = result
                 pending.remove(result.step_id)
@@ -115,7 +120,9 @@ class PlanExecutor:
                     changed = False
                     for i in list(pending):
                         if any(d in completed and not completed[d].ok for d in deps[i]):
-                            completed[i] = StepResult(i, False, error="dependency_failed", attempts=0)
+                            completed[i] = StepResult(
+                                i, False, error="dependency_failed", attempts=0
+                            )
                             pending.remove(i)
                             changed = True
 
