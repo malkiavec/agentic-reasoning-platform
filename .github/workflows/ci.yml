@@ -55,3 +55,4 @@ jobs:
         working-directory: apps/web
       - run: npm run build
         working-directory: apps/web
+      - run: sh scripts/test_restore_postgres.sh
