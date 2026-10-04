@@ -1,16 +1,31 @@
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from packages.observability.metrics import RunMetrics
 from packages.db.session import SessionLocal
 from packages.db.repository import get_run, update_run
 from apps.api.auth import RequestPrincipal, require_principal
 
 router=APIRouter(prefix="/v1")
-metrics=RunMetrics()
+metrics = RunMetrics()
 
 @router.get("/system/metrics")
 async def system_metrics():
     return metrics.snapshot()
+
+@router.get("/metrics", include_in_schema=False)
+async def prometheus_metrics():
+    from prometheus_client import CONTENT_TYPE_LATEST, Gauge, generate_latest
+    snapshot = metrics.snapshot()
+    values = {
+        "completed_runs": snapshot["completed_runs"],
+        "failed_runs": snapshot["failed_runs"],
+        "input_tokens": snapshot["input_tokens"],
+        "output_tokens": snapshot["output_tokens"],
+        "tool_calls": snapshot["tool_calls"],
+    }
+    for name, value in values.items():
+        Gauge(f"agent_{name}", f"Agent platform {name}").set(value)
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 @router.post("/runs/{run_id}/cancel")
 async def cancel_run(run_id: UUID, principal: RequestPrincipal=Depends(require_principal)):
