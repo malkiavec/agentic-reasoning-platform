@@ -47,6 +47,9 @@ class PolicyEngine:
         if tool in self._approval_tools or tool.startswith(("computer.", "browser.write")):
             return Decision(True, Risk.HIGH, True, "high_risk_action_requires_approval")
 
+        if tool == "http.rest" and str(action.arguments.get("method", "GET")).upper() not in {"GET", "HEAD"}:
+            return Decision(True, Risk.HIGH, True, "http_write_requires_approval")
+
         if tool.startswith(self._medium_prefixes):
             return Decision(True, Risk.MEDIUM, False, "external_side_effect_possible")
 
