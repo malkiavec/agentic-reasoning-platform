@@ -57,9 +57,9 @@ async def _execute_run(task,run_id:str)->dict:
                     checkpoint.state=RunState.FAILED; checkpoint.results["error"]="input_guardrail_blocked"
                     await update_run(session,UUID(run_id),state="failed",checkpoint=checkpoint.as_dict())
                     await audit(session,tenant_id=record.tenant_id,run_id=UUID(run_id),event_type="guardrail.blocked",actor="system",payload={"findings":verdict.findings})
-                    await emit(redis,run_id,"run.failed",reason="input_guardrail_blocked"); return {"run_id":run_id,"state":"failed"}
+                    await emit(redis,run_id,"run.failed",reason="input_guardrail_blocked",_tenant_id=record.tenant_id); return {"run_id":run_id,"state":"failed"}
 
-                await update_run(session,UUID(run_id),state="planning"); await emit(redis,run_id,"run.planning")
+                await update_run(session,UUID(run_id),state="planning"); await emit(redis,run_id,"run.planning",_tenant_id=record.tenant_id)
                 if not checkpoint.plan:
                     max_steps=int((record.checkpoint or {}).get("max_steps",20))
                     try:
@@ -85,7 +85,7 @@ async def _execute_run(task,run_id:str)->dict:
                         await emit(redis,run_id,"run.cancelled"); return {"run_id":run_id,"state":"cancelled"}
                 checkpoint.state=RunState.EXECUTING; checkpoint.step_index=index
                 await update_run(session,UUID(run_id),state="executing",checkpoint=checkpoint.as_dict())
-                await emit(redis,run_id,"step.started",step_id=raw["id"],index=index)
+                await emit(redis,run_id,"step.started",step_id=raw["id"],index=index,_tenant_id=record.tenant_id)
 
                 if raw["tool"]=="__final__":
                     result={"output":raw["arguments"]["prompt"]}
@@ -100,19 +100,19 @@ async def _execute_run(task,run_id:str)->dict:
                     checkpoint.state=RunState.WAITING_APPROVAL
                     checkpoint.results[raw["id"]]={"status":"approval_pending","approval_id":result["approval_id"]}
                     await update_run(session,UUID(run_id),state="waiting_approval",checkpoint=checkpoint.as_dict())
-                    await emit(redis,run_id,"run.waiting_approval",step_id=raw["id"],approval_id=result["approval_id"])
+                    await emit(redis,run_id,"run.waiting_approval",step_id=raw["id"],approval_id=result["approval_id"],_tenant_id=record.tenant_id)
                     await audit(session,tenant_id=record.tenant_id,run_id=UUID(run_id),event_type="approval.requested",actor="agent",payload=result)
                     return {"run_id":run_id,"state":"waiting_approval","approval_id":result["approval_id"]}
 
                 checkpoint.results[raw["id"]]=result
                 checkpoint.completed_steps.append(raw["id"]); checkpoint.step_index=index+1
                 await update_run(session,UUID(run_id),state="executing",checkpoint=checkpoint.as_dict())
-                await emit(redis,run_id,"step.completed",step_id=raw["id"],result=result)
+                await emit(redis,run_id,"step.completed",step_id=raw["id"],result=result,_tenant_id=record.tenant_id)
 
             checkpoint.state=RunState.COMPLETED
             await update_run(session,UUID(run_id),state="completed",checkpoint=checkpoint.as_dict())
             await audit(session,tenant_id=record.tenant_id,run_id=UUID(run_id),event_type="run.completed",actor="system",payload={"steps":len(checkpoint.completed_steps)})
-            await emit(redis,run_id,"run.completed",steps=len(checkpoint.completed_steps))
+            await emit(redis,run_id,"run.completed",steps=len(checkpoint.completed_steps,_tenant_id=record.tenant_id))
             return {"run_id":run_id,"state":"completed"}
     except Exception as exc:
         async with SessionLocal() as session:
