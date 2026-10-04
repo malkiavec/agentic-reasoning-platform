@@ -13,6 +13,8 @@ from packages.security.kill_switch import KillSwitch
 from packages.security.policy import Action, PolicyEngine
 from packages.tools.contracts import ToolContext
 from packages.tools.registry import ToolRegistry
+from packages.db.action_ledger import begin_action, complete_action
+from packages.db.session import SessionLocal
 
 
 def action_fingerprint(tool: str, arguments: dict[str, Any]) -> str:
@@ -93,7 +95,8 @@ class ToolExecutor:
         if not decision.allowed:
             return ExecutionResult(False, error=decision.reason)
 
-        action_id = action_fingerprint(tool_name, arguments)
+        base_action_id = action_fingerprint(tool_name, arguments)
+        action_id = action_fingerprint(base_action_id, {"run_id": run_id or request_id or actor})
         needs_approval = decision.requires_approval or spec.requires_approval
         if needs_approval and approved_approval_id is None:
             if self.approval_service is None or run_id is None:
@@ -128,6 +131,20 @@ class ToolExecutor:
         adapter = self.registry.adapter(tool_name)
         if adapter is None:
             return ExecutionResult(False, error="tool_adapter_unavailable", action_id=action_id)
+
+        async with SessionLocal() as ledger_session:
+            ledger = await begin_action(
+                ledger_session,
+                tenant_id=tenant_id,
+                run_id=__import__("uuid").UUID(run_id) if run_id else None,
+                action_id=action_id,
+                tool=tool_name,
+                idempotent=spec.security.idempotent,
+            )
+            if ledger.status == "completed":
+                return ExecutionResult(True, output=ledger.output, approval_id=approved_approval_id, action_id=action_id)
+            if ledger.status == "ambiguous" or (ledger.status == "in_progress" and not spec.security.idempotent):
+                return ExecutionResult(False, error="action_recovery_required", action_id=action_id)
 
         redis = Redis.from_url(self.redis_url, decode_responses=True)
         try:
@@ -244,6 +261,16 @@ class ToolExecutor:
                     )
                 except (TypeError, ValueError):
                     pass
+            async with SessionLocal() as ledger_session:
+                ledger = await begin_action(
+                    ledger_session,
+                    tenant_id=tenant_id,
+                    run_id=__import__("uuid").UUID(run_id) if run_id else None,
+                    action_id=action_id,
+                    tool=tool_name,
+                    idempotent=spec.security.idempotent,
+                )
+                await complete_action(ledger_session, ledger, value)
             return ExecutionResult(
                 True,
                 output=value,
