@@ -4,7 +4,9 @@ from celery import Task
 from redis.asyncio import Redis
 from packages.db.repository import get_run, update_run, audit
 from packages.db.session import SessionLocal
-from packages.agent_runtime.planner import Planner
+from packages.agent_runtime.planner import Planner, StructuredPlanner
+from packages.agent_runtime.gateway import MockProvider, ModelGateway
+from packages.agent_runtime.routing import ModelRoute, ModelRouter
 from packages.guardrails.input import InputGuardrail
 from packages.orchestration.state import Checkpoint, RunState
 from packages.tools.registry import ToolRegistry, ToolSpec
@@ -15,6 +17,11 @@ from .celery_app import celery_app
 
 REDIS_URL=os.getenv("REDIS_URL","redis://redis:6379/0")
 registry=ToolRegistry()
+gateway=ModelGateway(ModelRouter([ModelRoute(
+    provider="mock", model="reasoning-default", max_context_tokens=1_000_000,
+    capabilities=frozenset({"reasoning","structured_output"})
+)]))
+gateway.register("mock", MockProvider())
 
 async def emit(redis,run_id,event_type,**payload):
     await redis.publish(f"run:{run_id}",json.dumps({"type":event_type,"run_id":run_id,**payload},separators=(",",":")))
