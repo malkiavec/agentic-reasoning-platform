@@ -94,7 +94,7 @@ async def ready():
         finally:
             if redis is not None:
                 await redis.aclose()
-    except Exception as exc:
+    except Exception:
         raise HTTPException(status_code=503, detail="dependencies_unready") from exc
     return {"status": "ready"}
 
