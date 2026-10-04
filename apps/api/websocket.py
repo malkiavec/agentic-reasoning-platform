@@ -61,7 +61,7 @@ async def stream_run(websocket: WebSocket, run_id: UUID):
                     **event.payload,
                 })
 
-            if state in {"completed", "failed", "cancelled"}:
+            if state in {"completed", "failed", "cancelled", "recovery_required"}:
                 terminal = True
             else:
                 await asyncio.sleep(0.25)
