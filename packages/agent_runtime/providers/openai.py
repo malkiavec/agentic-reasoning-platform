@@ -5,17 +5,10 @@ import httpx
 
 from .base import ProviderError
 from .http import HttpModelProvider
-from packages.agent_runtime.models import (
-    ModelRequest, ModelResponse, ModelStreamEvent, ToolCall
-)
+from packages.agent_runtime.models import ModelRequest, ModelResponse, ModelStreamEvent, ToolCall
 
 class OpenAIProvider(HttpModelProvider):
-    def __init__(
-        self,
-        api_key: str,
-        base_url: str = "https://api.openai.com/v1",
-        timeout: float = 120.0,
-    ):
+    def __init__(self, api_key: str, base_url: str = "https://api.openai.com/v1", timeout: float = 120.0):
         super().__init__(name="openai", base_url=base_url, api_key=api_key, timeout=timeout)
 
     @staticmethod
@@ -25,9 +18,10 @@ class OpenAIProvider(HttpModelProvider):
             "input": [{
                 "role": "user",
                 "content": [
-                    {"type": p.type, "text": p.data}
+                    {"type": "input_text", "text": p.data}
                     if p.type == "text"
-                    else {"type": p.type, "data": p.data}
+                    elif p.type == "image"
+                    else {"type": "input_file", "file_data": p.data}
                     for p in request.input
                 ],
             }],
@@ -50,7 +44,7 @@ class OpenAIProvider(HttpModelProvider):
         return payload
 
     async def generate(self, request: ModelRequest) -> ModelResponse:
-        data = await self.post("/responses", self._payload(request))
+        data = await self.post("/responses", self._payload(request), {})
         calls = []
         text = data.get("output_text", "")
         for item in data.get("output", []):
@@ -61,46 +55,29 @@ class OpenAIProvider(HttpModelProvider):
                         args = json.loads(args)
                     except ValueError:
                         args = {}
-                calls.append(
-                    ToolCall(
-                        id=item.get("call_id", item.get("id", "")),
-                        name=item.get("name", ""),
-                        arguments=args,
-                    )
-                )
+                calls.append(ToolCall(id=item.get("call_id", item.get("id", "")),
+                                      name=item.get("name", ""), arguments=args))
         structured = None
         if request.response_schema and text:
             try:
                 structured = json.loads(text)
             except ValueError:
                 pass
-        return ModelResponse(
-            output_text=text,
-            tool_calls=calls,
-            structured_output=structured,
-            usage=self.usage(data),
-            finish_reason="stop",
-            provider_request_id=data.get("id"),
-        )
+        return ModelResponse(output_text=text, tool_calls=calls, structured_output=structured,
+                             usage=self.usage(data), finish_reason="stop",
+                             provider_request_id=data.get("id"))
 
     async def stream(self, request: ModelRequest) -> AsyncIterator[ModelStreamEvent]:
         headers = self._headers({"Accept": "text/event-stream"})
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                async with client.stream(
-                    "POST",
-                    self.base_url + "/responses",
-                    json=self._payload(request, stream=True),
-                    headers=headers,
-                ) as response:
+                async with client.stream("POST", self.base_url + "/responses",
+                                         json=self._payload(request, stream=True), headers=headers) as response:
                     if response.status_code >= 400:
                         body = await response.aread()
                         retryable = response.status_code == 429 or response.status_code >= 500
-                        raise ProviderError(
-                            f"provider_http_{response.status_code}: {body[:500]!r}",
-                            retryable=retryable,
-                            status_code=response.status_code,
-                        )
+                        raise ProviderError(f"provider_http_{response.status_code}: {body[:500]!r}",
+                                             retryable=retryable, status_code=response.status_code)
                     async for line in response.aiter_lines():
                         if not line.startswith("data:"):
                             continue
@@ -112,25 +89,16 @@ class OpenAIProvider(HttpModelProvider):
                         except ValueError:
                             continue
                         event_type = event.get("type", "")
-                        if event_type in {
-                            "response.output_text.delta",
-                            "response.refusal.delta",
-                        }:
-                            yield ModelStreamEvent(
-                                type="text.delta",
-                                text=event.get("delta", ""),
-                            )
+                        if event_type in {"response.output_text.delta", "response.refusal.delta"}:
+                            yield ModelStreamEvent(type="text.delta", text=event.get("delta", ""))
                         elif event_type == "response.completed":
                             response_data = event.get("response") or {}
+                            usage = self.usage(response_data)
                             yield ModelStreamEvent(
                                 type="response.completed",
-                                response=ModelResponse(
-                                    output_text=response_data.get("output_text", ""),
-                                    usage=self.usage(response_data),
-                                    provider_request_id=response_data.get("id"),
-                                ),
-                                usage=self.usage(response_data),
-                            )
+                                response=ModelResponse(output_text=response_data.get("output_text", ""),
+                                                        usage=usage, provider_request_id=response_data.get("id")),
+                                usage=usage)
         except httpx.TimeoutException as exc:
             raise ProviderError("provider_timeout", retryable=True) from exc
         except httpx.HTTPError as exc:
