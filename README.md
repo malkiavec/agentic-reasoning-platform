@@ -35,4 +35,6 @@ The model proposes actions; the policy engine authorizes them; validated tool ad
 
 ## Status
 
-Initial production-oriented scaffold. Provider adapters, browser/computer-use backends, benchmark runners, and integrations are modular and replaceable.
+Production-hardening baseline with durable execution, policy-enforced Tool Registry actions, persistent HITL approvals, tenant membership RBAC, OIDC authentication, pgvector memory, hybrid retrieval, distributed tool controls, kill switch, WebSocket event replay, OpenTelemetry hooks, Prometheus metrics, multimodal provider contracts, evaluation runner, and controlled Web/GitHub adapters.
+
+Provider-specific capabilities and external credentials remain environment-configured. Browser/computer-use and business-app adapters remain explicitly sandboxed integration boundaries; they must not bypass the Tool Registry or policy engine.

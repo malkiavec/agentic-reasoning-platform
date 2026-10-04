@@ -10,14 +10,9 @@
 - Security guardrails and output validation
 - Model, planner, retrieval, memory, multimodal, and evaluation contracts
 
-## Next production layers
-1. Redis-backed event streaming and durable event history
-2. Real provider adapters and model routing/fallback
-3. PostgreSQL vector/lexical memory implementation with provenance and deduplication
-4. Browser/computer-use sandbox with controlled egress
-5. Approval persistence, multi-approver workflows, and emergency kill switch
-6. OpenTelemetry metrics/traces and Prometheus/Grafana dashboards
-7. API authentication, JWT/OIDC, tenant RBAC, quotas, and request signing
-8. Production Nginx/TLS, backups, restore verification, and deployment manifests
-9. Web control plane for runs, approvals, tools, memory, and evaluations
-10. Benchmark runners for long-context and long-horizon agentic tasks
+## Remaining production gates
+1. Complete provider-specific multimodal/streaming conformance tests against each vendor's current API.
+2. Finish browser/computer-use sandboxing and business-app adapters (Slack, Gmail, Drive, Notion, Linear, Jira, databases, webhooks, MCP).
+3. Add full load, chaos, penetration, SSRF, prompt-injection, and disaster-recovery restore tests in a production-like environment.
+4. Complete authenticated control-plane wiring and operational dashboards.
+5. Execute the registered benchmark suites and establish regression thresholds before production promotion.
