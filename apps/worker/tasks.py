@@ -13,6 +13,7 @@ from packages.tools.execution import ToolExecutor
 from packages.tools.registry import ToolRegistry
 from packages.hitl.bridge import PersistentApprovalService
 from packages.security.policy import PolicyEngine
+from packages.security.redaction import redact_value
 from .celery_app import celery_app
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
@@ -30,7 +31,7 @@ except RuntimeError:
 
 async def emit(redis, run_id, event_type, **payload):
     tenant_id = payload.pop("_tenant_id", None)
-    event = {"type": event_type, "run_id": run_id, **payload}
+    event = {"type": event_type, "run_id": run_id, **redact_value(payload)}
     if tenant_id:
         async with SessionLocal() as event_session:
             await append_event(event_session, tenant_id=tenant_id, run_id=UUID(run_id),
