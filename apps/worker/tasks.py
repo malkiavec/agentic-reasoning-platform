@@ -3,6 +3,7 @@ from uuid import UUID
 from celery import Task
 from redis.asyncio import Redis
 from packages.db.repository import get_run, update_run, audit
+from packages.db.event_history import append_event
 from packages.db.session import SessionLocal
 from packages.agent_runtime.planner import Planner, StructuredPlanner
 from packages.agent_runtime.gateway import MockProvider, ModelGateway
@@ -24,6 +25,10 @@ gateway=ModelGateway(ModelRouter([ModelRoute(
 gateway.register("mock", MockProvider())
 
 async def emit(redis,run_id,event_type,**payload):
+    tenant_id=payload.pop("_tenant_id",None)
+    if tenant_id:
+        async with SessionLocal() as event_session:
+            await append_event(event_session,tenant_id=tenant_id,run_id=UUID(run_id),event_type=event_type,actor="system",payload=payload)
     await redis.publish(f"run:{run_id}",json.dumps({"type":event_type,"run_id":run_id,**payload},separators=(",",":")))
 
 class DurableTask(Task):
