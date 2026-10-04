@@ -1,6 +1,8 @@
+import os
 from uuid import UUID
 from fastapi import Depends, FastAPI, HTTPException
 from redis.asyncio import Redis
+from sqlalchemy import text
 from pydantic import BaseModel, Field
 from packages.db.repository import create_run, get_run
 from packages.db.session import SessionLocal
@@ -36,8 +38,8 @@ async def health():
 async def ready():
     try:
         async with SessionLocal() as session:
-            await session.execute(__import__("sqlalchemy").text("SELECT 1"))
-        redis = Redis.from_url(__import__("os").getenv("REDIS_URL", "redis://redis:6379/0"))
+            await session.execute(text("SELECT 1"))
+        redis = Redis.from_url(os.getenv("REDIS_URL", "redis://redis:6379/0"))
         try:
             await redis.ping()
         finally:
