@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
-from sqlalchemy import DateTime, Integer, JSON, String, Text, UniqueConstraint
+
+from sqlalchemy import BigInteger, DateTime, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 class Base(DeclarativeBase):
@@ -8,7 +9,9 @@ class Base(DeclarativeBase):
 
 class RunRecord(Base):
     __tablename__ = "runs"
-    __table_args__ = (UniqueConstraint("tenant_id", "idempotency_key", name="uq_runs_tenant_idempotency"),)
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "idempotency_key", name="uq_runs_tenant_idempotency"),
+    )
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     tenant_id: Mapped[str] = mapped_column(String(128), index=True)
     state: Mapped[str] = mapped_column(String(32), default="created", index=True)
@@ -18,15 +21,24 @@ class RunRecord(Base):
     checkpoint: Mapped[dict] = mapped_column(JSON, default=dict)
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     idempotency_key: Mapped[str | None] = mapped_column(String(256), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
 
 class AuditEvent(Base):
     __tablename__ = "audit_events"
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    sequence: Mapped[int] = mapped_column(BigInteger, autoincrement=True, unique=True, index=True)
     tenant_id: Mapped[str] = mapped_column(String(128), index=True)
     run_id: Mapped[UUID | None] = mapped_column(index=True, nullable=True)
     event_type: Mapped[str] = mapped_column(String(128), index=True)
     actor: Mapped[str] = mapped_column(String(256))
     payload: Mapped[dict] = mapped_column(JSON, default=dict)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
