@@ -26,6 +26,7 @@ class ToolSpec:
     auth_requirements: frozenset[str] = frozenset()
     allowed_agents: frozenset[str] | None = None
     rate_limit_per_minute: int = 60
+    output_schema: dict[str, Any] | None = None
 
     @property
     def risk(self) -> str:
@@ -72,11 +73,9 @@ class ToolRegistry:
         permissions: frozenset[str] = frozenset(),
         auth_requirements: frozenset[str] = frozenset(),
         rate_limit_per_minute: int = 60,
+        output_schema: dict[str, Any] | None = None,
     ) -> None:
-        schema = input_schema or {
-            "type": "object",
-            "additionalProperties": True,
-        }
+        schema = input_schema or {"type": "object", "additionalProperties": True}
         self.register(
             ToolSpec(
                 name=name,
@@ -86,6 +85,7 @@ class ToolRegistry:
                 permissions=permissions,
                 auth_requirements=auth_requirements,
                 rate_limit_per_minute=rate_limit_per_minute,
+                output_schema=output_schema,
             ),
             adapter,
         )
