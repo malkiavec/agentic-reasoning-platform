@@ -5,9 +5,11 @@ from packages.db.repository import create_run, get_run
 from packages.db.session import SessionLocal
 from apps.worker.tasks import execute_run
 from apps.api.websocket import router as websocket_router
+from apps.api.approvals import router as approval_router
 
-app = FastAPI(title="Agentic Reasoning Platform API", version="0.2.0")
+app = FastAPI(title="Agentic Reasoning Platform API", version="0.3.0")
 app.include_router(websocket_router)
+app.include_router(approval_router)
 
 class RunRequest(BaseModel):
     prompt: str = Field(min_length=1)
