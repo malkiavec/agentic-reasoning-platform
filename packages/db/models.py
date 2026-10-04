@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from sqlalchemy import BigInteger, DateTime, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import BigInteger, DateTime, Identity, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 class Base(DeclarativeBase):
@@ -33,7 +33,7 @@ class RunRecord(Base):
 class AuditEvent(Base):
     __tablename__ = "audit_events"
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
-    sequence: Mapped[int] = mapped_column(BigInteger, autoincrement=True, unique=True, index=True)
+    sequence: Mapped[int] = mapped_column(BigInteger, Identity(), unique=True, index=True)
     tenant_id: Mapped[str] = mapped_column(String(128), index=True)
     run_id: Mapped[UUID | None] = mapped_column(index=True, nullable=True)
     event_type: Mapped[str] = mapped_column(String(128), index=True)
