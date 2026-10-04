@@ -6,6 +6,8 @@ from typing import Any
 import httpx
 import jwt
 from fastapi import Header, HTTPException
+from packages.db.session import SessionLocal
+from sqlalchemy import text
 
 @dataclass(frozen=True)
 class RequestPrincipal:
@@ -81,11 +83,19 @@ async def principal_from_token(token: str) -> RequestPrincipal:
     roles = _claim(payload, roles_claim, [])
     if not tenant_id or not isinstance(roles, (list, tuple, set)):
         raise HTTPException(status_code=403, detail="tenant_or_roles_claim_missing")
-    return RequestPrincipal(
-        subject=str(payload["sub"]),
-        tenant_id=str(tenant_id),
-        roles=frozenset(str(role) for role in roles),
-    )
+    subject = str(payload["sub"])
+    tenant = str(tenant_id)
+    token_roles = frozenset(str(role) for role in roles)
+    if os.getenv("AUTH_REQUIRE_MEMBERSHIP", "true").lower() in {"1", "true", "yes"}:
+        async with SessionLocal() as session:
+            row = (await session.execute(text(
+                "SELECT roles FROM tenant_memberships WHERE tenant_id = :tenant AND subject = :subject AND active = TRUE"
+            ), {"tenant": tenant, "subject": subject})).first()
+        if row is None:
+            raise HTTPException(status_code=403, detail="tenant_membership_required")
+        db_roles = row[0] if isinstance(row[0], list) else []
+        return RequestPrincipal(subject=subject, tenant_id=tenant, roles=frozenset(str(role) for role in db_roles))
+    return RequestPrincipal(subject=subject, tenant_id=tenant, roles=token_roles)
 
 async def require_principal(
     authorization: str | None = Header(default=None),
