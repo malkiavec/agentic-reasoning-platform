@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import Any
 
 class Risk(IntEnum):
     LOW = 1
@@ -11,7 +10,7 @@ class Risk(IntEnum):
 @dataclass(frozen=True)
 class Action:
     tool: str
-    arguments: dict[str, Any]
+    arguments: dict
     actor: str
     tenant_id: str
 
@@ -23,9 +22,13 @@ class Decision:
     reason: str
 
 class PolicyEngine:
-    """Authorization boundary. Models never grant themselves permission."""
+    """Authorization boundary. Model output never grants permission."""
     def evaluate(self, action: Action) -> Decision:
-        if not action.tool or not action.tenant_id:
-            return Decision(False, Risk.CRITICAL, False, "invalid security context")
-        risk = Risk.HIGH if action.tool in {"shell", "computer_use"} else Risk.LOW
-        return Decision(True, risk, risk >= Risk.HIGH, "policy evaluated")
+        if not action.tool or not action.tenant_id or not action.actor:
+            return Decision(False, Risk.CRITICAL, False, "missing_security_context")
+        tool = action.tool.lower()
+        if tool in {"shell", "computer_use", "browser_write"}:
+            return Decision(True, Risk.HIGH, True, "high_risk_action_requires_approval")
+        if tool.startswith("admin.") or tool.startswith("secrets."):
+            return Decision(False, Risk.CRITICAL, False, "restricted_tool")
+        return Decision(True, Risk.LOW, False, "allowed")
