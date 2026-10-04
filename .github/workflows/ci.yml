@@ -30,7 +30,7 @@ jobs:
           --health-timeout 5s
           --health-retries 20
     env:
-      DATABASE_URL: postgresql+asyncpg://agent:agent@localhost:5432/agentic
+      DATABASE_URL: postgresql://agent:agent@localhost:5432/agentic
       REDIS_URL: redis://localhost:6379/0
       APP_ENV: test
       ENVIRONMENT: test
@@ -40,6 +40,8 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install -e ".[dev]"
+      - run: psql "$DATABASE_URL" -c "CREATE EXTENSION IF NOT EXISTS vector;"
+      - run: python -c "import asyncio; from packages.db.session import engine; from packages.db.bootstrap import create_schema; asyncio.run(create_schema(engine))"
       - run: sh scripts/migrate.sh
       - run: ruff check . --select F --ignore F401
       - run: pytest
