@@ -13,6 +13,9 @@ EXTERNAL_TOOL_REGISTRY={
     "linear":"Linear","jira":"Jira","databases":"Databases","webhooks":"Webhooks","mcp":"Custom MCP / API tools",
 }
 
-def register_external_boundaries(registry):
+def register_external_boundaries(registry, *, exclude: set[str] | None = None):
+    exclude = exclude or set()
     for name,label in EXTERNAL_TOOL_REGISTRY.items():
+        if name in exclude:
+            continue
         registry.register_external(name,label,ExternalBoundaryAdapter(name))
