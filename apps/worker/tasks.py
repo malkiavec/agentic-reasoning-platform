@@ -46,6 +46,7 @@ async def _execute_run(task,run_id:str)->dict:
             checkpoint=Checkpoint.from_dict(record.checkpoint or {})
             if checkpoint.state in {RunState.COMPLETED,RunState.CANCELLED}: return {"run_id":run_id,"state":checkpoint.state.value}
 
+            if checkpoint.state != RunState.WAITING_APPROVAL:
             verdict=InputGuardrail().check(record.prompt)
             if not verdict.allowed:
                 checkpoint.state=RunState.FAILED; checkpoint.results["error"]="input_guardrail_blocked"
@@ -55,8 +56,15 @@ async def _execute_run(task,run_id:str)->dict:
 
             await update_run(session,UUID(run_id),state="planning"); await emit(redis,run_id,"run.planning")
             if not checkpoint.plan:
+                max_steps=int((record.checkpoint or {}).get("max_steps",20))
+                try:
+                    steps=await StructuredPlanner(gateway,registry).plan(
+                        record.prompt,model=record.model,
+                        reasoning_effort=record.reasoning_effort,max_steps=max_steps)
+                except ValueError:
+                    steps=Planner().plan(record.prompt,max_steps)
                 checkpoint.plan=[{"id":s.id,"tool":s.tool,"arguments":s.arguments,"parallel_group":s.parallel_group}
-                                 for s in Planner().plan(record.prompt,int((record.checkpoint or {}).get("max_steps",20)))]
+                                 for s in steps]
                 await update_run(session,UUID(run_id),checkpoint=checkpoint.as_dict())
 
             approval_service=PersistentApprovalService(SessionLocal)
