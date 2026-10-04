@@ -88,11 +88,25 @@ class ToolExecutor:
             return ExecutionResult(False, error="tool_adapter_unavailable", action_id=action_id)
 
         redis = Redis.from_url(self.redis_url, decode_responses=True)
+        try:
+            await redis.ping()
+        except Exception:
+            if redis is not None:
+                await redis.aclose()
+            if os.getenv("APP_ENV", "production").lower() in {"production", "prod"}:
+                return ExecutionResult(False, error="security_dependency_unavailable", action_id=action_id)
+            redis = None
         lock_key = f"agent:tool:lock:{tenant_id}:{action_id}"
         idem_key = idempotency_key or f"{run_id or request_id or actor}:{action_id}"
         result_key = f"agent:tool:result:{tenant_id}:{idem_key}"
         acquired = False
         try:
+            if redis is None:
+                context = ToolContext(tenant_id=tenant_id, actor=actor, run_id=run_id or "", request_id=request_id or run_id or "")
+                value = await asyncio.wait_for(adapter.invoke(arguments, context), timeout=spec.security.timeout_seconds)
+                if spec.output_schema is not None and list(Draft202012Validator(spec.output_schema).iter_errors(value)):
+                    return ExecutionResult(False, error="invalid_tool_output", action_id=action_id)
+                return ExecutionResult(True, output=value, approval_id=approved_approval_id, action_id=action_id)
             window = int(time.time() // 60)
             rate_key = f"agent:tool:rate:{tenant_id}:{tool_name}:{window}"
             count = await redis.incr(rate_key)
