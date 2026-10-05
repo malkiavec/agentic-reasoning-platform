@@ -214,10 +214,17 @@ class ToolExecutor:
                     run_id=run_id or "",
                     request_id=request_id or run_id or "",
                 )
-                value = await asyncio.wait_for(
-                    adapter.invoke(arguments, context),
-                    timeout=spec.security.timeout_seconds,
-                )
+                try:
+                    value = await asyncio.wait_for(
+                        adapter.invoke(arguments, context),
+                        timeout=spec.security.timeout_seconds,
+                    )
+                except TimeoutError:
+                    return ExecutionResult(False, error="tool_timeout", action_id=action_id)
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    return ExecutionResult(False, error=f"tool_error:{type(exc).__name__}", action_id=action_id)
                 if spec.output_schema is not None and list(
                     Draft202012Validator(spec.output_schema).iter_errors(value)
                 ):
