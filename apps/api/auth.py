@@ -20,6 +20,7 @@ class OIDCVerifier:
         self.jwks_url = os.getenv("OIDC_JWKS_URL", "")
         self.issuer = os.getenv("OIDC_ISSUER", "")
         self.audience = os.getenv("OIDC_AUDIENCE", "")
+        self.require_issuer_audience = os.getenv("AUTH_REQUIRE_ISSUER_AUDIENCE", "true").lower() in {"1", "true", "yes"}
         self._keys: dict[str, Any] = {}
         self._expires_at = 0.0
 
@@ -41,6 +42,8 @@ class OIDCVerifier:
         return self._keys
 
     async def verify(self, token: str) -> dict[str, Any]:
+        if self.require_issuer_audience and (not self.issuer or not self.audience):
+            raise HTTPException(status_code=503, detail="oidc_issuer_audience_not_configured")
         try:
             header = jwt.get_unverified_header(token)
             kid = header.get("kid")
