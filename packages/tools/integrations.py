@@ -12,7 +12,7 @@ class SaaSAdapter(ToolAdapter):
     name: str
     security = ToolSecurity(risk="medium", timeout_seconds=20.0, idempotent=True)
     def _token(self, context: ToolContext) -> str:
-        token = credentials.get(context.tenant_id, self.credential_name)
+        token = credentials.get(context.tenant_id, self.credential_name, context.credential_ref)
         if not token: raise RuntimeError(f"{self.credential_name}_credential_not_configured")
         return token
     async def _request(self, method: str, url: str, token: str, *, body: Any=None, params: dict[str,Any]|None=None, headers: dict[str,str]|None=None) -> Any:
@@ -102,7 +102,7 @@ class JiraAdapter(SaaSAdapter):
 class DatabaseAdapter(ToolAdapter):
     name="databases"; security=ToolSecurity(risk="high",requires_approval=True,timeout_seconds=20,idempotent=True)
     async def invoke(self,a,context):
-        dsn=credentials.get(context.tenant_id,"databases")
+        dsn=credentials.get(context.tenant_id,"databases",context.credential_ref)
         if not dsn: raise RuntimeError("database_credential_not_configured")
         q=str(a.get("query","")).strip()
         if not q.lower().startswith(("select","with","show","describe","explain")): raise ValueError("database_read_only_query_required")
@@ -114,7 +114,7 @@ class DatabaseAdapter(ToolAdapter):
 class WebhookAdapter(ToolAdapter):
     name="webhooks"; security=ToolSecurity(risk="high",requires_approval=True,timeout_seconds=20,idempotent=False)
     async def invoke(self,a,context):
-        url=validate_url(str(a.get("url",""))); token=credentials.get(context.tenant_id,"webhooks")
+        url=validate_url(str(a.get("url",""))); token=credentials.get(context.tenant_id,"webhooks",context.credential_ref)
         if not token: raise RuntimeError("webhook_credential_not_configured")
         method=str(a.get("method","POST")).upper()
         if method not in {"POST","PUT","PATCH"}: raise ValueError("webhook_method_not_allowed")
@@ -125,7 +125,7 @@ class WebhookAdapter(ToolAdapter):
 class MCPAdapter(ToolAdapter):
     name="mcp"; security=ToolSecurity(risk="high",requires_approval=True,timeout_seconds=30,idempotent=False)
     async def invoke(self,a,context):
-        url=validate_url(str(a.get("url",""))); token=credentials.get(context.tenant_id,"mcp")
+        url=validate_url(str(a.get("url",""))); token=credentials.get(context.tenant_id,"mcp",context.credential_ref)
         if not token: raise RuntimeError("mcp_credential_not_configured")
         method=str(a.get("method","tools/call"))
         if not method.startswith("tools/"): raise ValueError("mcp_tool_method_required")
