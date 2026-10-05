@@ -289,7 +289,7 @@ class ToolExecutor:
                 ledger = await begin_action(
                     ledger_session,
                     tenant_id=tenant_id,
-                    run_id=__import__("uuid").UUID(run_id) if run_id else None,
+                    run_id=UUID(run_id) if run_id else None,
                     action_id=action_id,
                     tool=tool_name,
                     idempotent=action_idempotent,
