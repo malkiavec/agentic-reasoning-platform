@@ -59,3 +59,13 @@ jobs:
       - run: npm audit --audit-level=high
         working-directory: apps/web
       - run: sh scripts/test_restore_postgres.sh
+      - name: Validate release scripts and production compose
+        env:
+          POSTGRES_PASSWORD: ci-test-password
+          DATABASE_URL: postgresql+asyncpg://agent:agent@localhost:5432/agentic
+          REDIS_URL: redis://redis:6379/0
+          APP_ENV: test
+        run: |
+          sh -n scripts/*.sh
+          python -m compileall -q scripts
+          docker compose -f docker-compose.prod.yml config >/tmp/compose-config.txt
