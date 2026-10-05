@@ -47,6 +47,17 @@ jobs:
       LOAD_MAX_FAILURE_RATE: ${{ vars.LOAD_MAX_FAILURE_RATE || '0.01' }}
       LOAD_MAX_P95_SECONDS: ${{ vars.LOAD_MAX_P95_SECONDS || '1.5' }}
       GIT_SSH_COMMAND: "ssh -o StrictHostKeyChecking=no"
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+      ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL }}
+      GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
+      CERT_TENANT_ID: ${{ vars.CERT_TENANT_ID }}
+      CERT_ACTOR: ${{ vars.CERT_ACTOR || 'staging-certifier' }}
+      CERT_ACTIONS_JSON: ${{ secrets.CERT_ACTIONS_JSON }}
+      CERT_EXPECT_APPROVAL_TOOLS: ${{ vars.CERT_EXPECT_APPROVAL_TOOLS }}
+      TOOL_CREDENTIALS_JSON: ${{ secrets.TOOL_CREDENTIALS_JSON }}
     steps:
       - uses: actions/checkout@v4
 
@@ -83,25 +94,10 @@ jobs:
       - name: PostgreSQL backup and disposable restore
         run: sh scripts/test_restore_postgres.sh
 
-      - name: Provider certification prerequisites
+      - name: Live provider certification
         run: python scripts/certify_providers.py
 
-      - name: Integration certification prerequisites
-        env:
-          GITLAB_CERT_TOKEN: ${{ secrets.GITLAB_CERT_TOKEN }}
-          SLACK_CERT_TOKEN: ${{ secrets.SLACK_CERT_TOKEN }}
-          DISCORD_CERT_TOKEN: ${{ secrets.DISCORD_CERT_TOKEN }}
-          GMAIL_CERT_TOKEN: ${{ secrets.GMAIL_CERT_TOKEN }}
-          GOOGLE_DRIVE_CERT_TOKEN: ${{ secrets.GOOGLE_DRIVE_CERT_TOKEN }}
-          NOTION_CERT_TOKEN: ${{ secrets.NOTION_CERT_TOKEN }}
-          LINEAR_CERT_TOKEN: ${{ secrets.LINEAR_CERT_TOKEN }}
-          JIRA_CERT_TOKEN: ${{ secrets.JIRA_CERT_TOKEN }}
-          JIRA_CERT_BASE_URL: ${{ secrets.JIRA_CERT_BASE_URL }}
-          DATABASE_CERT_DSN: ${{ secrets.DATABASE_CERT_DSN }}
-          WEBHOOK_CERT_TOKEN: ${{ secrets.WEBHOOK_CERT_TOKEN }}
-          WEBHOOK_CERT_URL: ${{ secrets.WEBHOOK_CERT_URL }}
-          MCP_CERT_TOKEN: ${{ secrets.MCP_CERT_TOKEN }}
-          MCP_CERT_URL: ${{ secrets.MCP_CERT_URL }}
+      - name: Live Tool Registry integration certification
         run: python scripts/certify_integrations.py
 
       - name: Controlled staging restart chaos
