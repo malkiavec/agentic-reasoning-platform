@@ -23,6 +23,9 @@ class HttpRestAdapter(ToolAdapter):
             if domain.strip()
         }
 
+    def is_idempotent(self, arguments: dict[str, Any]) -> bool:
+        return str(arguments.get("method", "GET")).upper() in {"GET", "HEAD"}
+
     def _allowed(self, url: str) -> bool:
         from urllib.parse import urlparse
         host = (urlparse(url).hostname or "").lower().rstrip(".")
