@@ -7,6 +7,7 @@ from .base import ProviderError
 from .http import HttpModelProvider
 from packages.agent_runtime.models import ContentPart, ModelRequest, ModelResponse, ModelStreamEvent, ToolCall
 
+
 class OpenAIProvider(HttpModelProvider):
     def __init__(self, api_key: str, base_url: str = "https://api.openai.com/v1", timeout: float = 120.0):
         super().__init__(name="openai", base_url=base_url, api_key=api_key, timeout=timeout)
@@ -20,7 +21,7 @@ class OpenAIProvider(HttpModelProvider):
         if part.type in {"file", "pdf", "document"}:
             item = {"type": "input_file", "file_data": part.data}
             if part.mime_type:
-                item["filename"] = f"input.{part.mime_type.split('/')[-1]}"
+                item["filename"] = f"input.{part.mime_type.split("/")[-1]}"
             return item
         raise ValueError(f"unsupported_content_type:{part.type}")
 
@@ -28,13 +29,12 @@ class OpenAIProvider(HttpModelProvider):
     def _payload(cls, request: ModelRequest, *, stream: bool = False) -> dict:
         payload = {
             "model": request.model,
-            "input": [{
-                "role": "user",
-                "content": [cls._content(p) for p in request.input],
-            }],
+            "input": [{"role": "user", "content": [cls._content(p) for p in request.input]}],
         }
         if request.tools:
             payload["tools"] = request.tools
+        if request.reasoning_effort:
+            payload["reasoning"] = {"effort": request.reasoning_effort}
         if request.response_schema:
             payload["text"] = {"format": {
                 "type": "json_schema",
