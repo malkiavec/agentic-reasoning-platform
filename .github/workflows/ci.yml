@@ -68,4 +68,6 @@ jobs:
         run: |
           sh -n scripts/*.sh
           python -m compileall -q scripts
+          printf '%s\n' 'POSTGRES_PASSWORD=ci-test-password' > .env
           docker compose -f docker-compose.prod.yml config >/tmp/compose-config.txt
+          rm -f .env
