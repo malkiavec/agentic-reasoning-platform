@@ -72,6 +72,18 @@ class ToolExecutor:
         spec = self.registry.get(tool_name)
         if spec is None:
             return ExecutionResult(False, error="tool_not_registered")
+        integration_names = frozenset({"web.search","github","github.write","gitlab","slack","discord","gmail","google_drive","notion","linear","jira","databases","webhooks","mcp","http.rest"})
+        if tool_name in integration_names:
+            from sqlalchemy import text
+            async with SessionLocal() as integration_session:
+                row = (await integration_session.execute(
+                    text("SELECT enabled FROM tenant_integrations WHERE tenant_id=:tenant AND tool_name=:tool"),
+                    {"tenant": tenant_id, "tool": tool_name},
+                )).first()
+            if row is None:
+                return ExecutionResult(False, error="integration_not_configured")
+            if not bool(row[0]):
+                return ExecutionResult(False, error="integration_disabled")
         if await self.kill_switch.is_active(tenant_id):
             return ExecutionResult(False, error="kill_switch_active")
         if spec.security.allowed_tenants is not None and tenant_id not in spec.security.allowed_tenants:
