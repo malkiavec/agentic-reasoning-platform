@@ -16,6 +16,7 @@ from packages.tools.contracts import ToolContext
 from packages.tools.registry import ToolRegistry
 from packages.db.action_ledger import begin_action, complete_action
 from packages.db.session import SessionLocal
+from packages.security.quota import QuotaExceeded, reserve_tool_call
 
 
 def action_fingerprint(tool: str, arguments: dict[str, Any]) -> str:
@@ -169,6 +170,11 @@ class ToolExecutor:
         acquired = False
         try:
             if redis is None:
+                try:
+                    async with SessionLocal() as quota_session:
+                        await reserve_tool_call(quota_session, tenant_id)
+                except QuotaExceeded as exc:
+                    return ExecutionResult(False, error=str(exc), action_id=action_id)
                 context = ToolContext(
                     tenant_id=tenant_id,
                     actor=actor,
@@ -250,6 +256,11 @@ class ToolExecutor:
                     action_id=action_id,
                 )
 
+            try:
+                async with SessionLocal() as quota_session:
+                    await reserve_tool_call(quota_session, tenant_id)
+            except QuotaExceeded as exc:
+                return ExecutionResult(False, error=str(exc), action_id=action_id)
             context = ToolContext(
                 tenant_id=tenant_id,
                 actor=actor,
