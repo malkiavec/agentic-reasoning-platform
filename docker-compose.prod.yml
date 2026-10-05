@@ -45,10 +45,21 @@ services:
       dockerfile: infrastructure/docker/worker.Dockerfile
     restart: unless-stopped
     env_file: .env
-    depends_on: [postgres, redis]
+    read_only: true
+    tmpfs: ["/tmp"]
+    security_opt: ["no-new-privileges:true"]
+    command: ["celery", "-A", "apps.worker.celery_app:celery_app", "worker", "--loglevel=INFO", "--concurrency=4", "--prefetch-multiplier=1"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
   nginx:
     image: nginx:1.27-alpine
     restart: unless-stopped
+    read_only: true
+    tmpfs: ["/var/cache/nginx", "/var/run", "/tmp"]
+    security_opt: ["no-new-privileges:true"]
     depends_on: [api]
     ports: ["80:80", "443:443"]
     volumes:

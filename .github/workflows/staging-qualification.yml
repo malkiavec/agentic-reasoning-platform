@@ -1,0 +1,115 @@
+name: Staging Qualification
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: "Deploy the current main commit to staging before qualification"
+        required: true
+        default: true
+        type: boolean
+      run_chaos:
+        description: "Restart staging worker, Redis, and PostgreSQL during qualification"
+        required: true
+        default: true
+        type: boolean
+
+concurrency:
+  group: staging-qualification
+  cancel-in-progress: false
+
+jobs:
+  qualify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: staging
+    permissions:
+      contents: read
+    env:
+      APP_ENV: staging
+      ENVIRONMENT: staging
+      CONTROL_PLANE_URL: ${{ secrets.CONTROL_PLANE_URL }}
+      CONTROL_PLANE_TOKEN: ${{ secrets.CONTROL_PLANE_TOKEN }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      PSQL_DATABASE_URL: ${{ secrets.PSQL_DATABASE_URL }}
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+      REDIS_URL: ${{ secrets.REDIS_URL }}
+      AUTH_MODE: oidc
+      OIDC_ISSUER: ${{ secrets.OIDC_ISSUER }}
+      OIDC_AUDIENCE: ${{ secrets.OIDC_AUDIENCE }}
+      OIDC_JWKS_URL: ${{ secrets.OIDC_JWKS_URL }}
+      AUTH_REQUIRE_ISSUER_AUDIENCE: "true"
+      AUTH_REQUIRE_MEMBERSHIP: "true"
+      PROVIDER_CERT_PROVIDERS: ${{ vars.PROVIDER_CERT_PROVIDERS }}
+      INTEGRATION_CERT_TOOLS: ${{ vars.INTEGRATION_CERT_TOOLS }}
+      LOAD_CONCURRENCY: ${{ vars.LOAD_CONCURRENCY || '10' }}
+      LOAD_REQUESTS_PER_WORKER: ${{ vars.LOAD_REQUESTS_PER_WORKER || '25' }}
+      LOAD_MAX_FAILURE_RATE: ${{ vars.LOAD_MAX_FAILURE_RATE || '0.01' }}
+      LOAD_MAX_P95_SECONDS: ${{ vars.LOAD_MAX_P95_SECONDS || '1.5' }}
+      GIT_SSH_COMMAND: "ssh -o StrictHostKeyChecking=no"
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+      ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL }}
+      GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
+      CERT_TENANT_ID: ${{ vars.CERT_TENANT_ID }}
+      CERT_ACTOR: ${{ vars.CERT_ACTOR || 'staging-certifier' }}
+      CERT_ACTIONS_JSON: ${{ secrets.CERT_ACTIONS_JSON }}
+      CERT_EXPECT_APPROVAL_TOOLS: ${{ vars.CERT_EXPECT_APPROVAL_TOOLS }}
+      TOOL_CREDENTIALS_JSON: ${{ secrets.TOOL_CREDENTIALS_JSON }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate release configuration
+        run: sh scripts/validate_deployment.sh
+
+      - name: Deploy immutable main revision to staging
+        if: inputs.deploy
+        env:
+          STAGING_SSH_HOST: ${{ secrets.STAGING_SSH_HOST }}
+          STAGING_SSH_USER: ${{ secrets.STAGING_SSH_USER }}
+          STAGING_SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+          STAGING_DEPLOY_PATH: ${{ secrets.STAGING_DEPLOY_PATH }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$STAGING_SSH_KEY" > ~/.ssh/staging_key
+          chmod 600 ~/.ssh/staging_key
+          export STAGING_SSH_KEY_PATH="$HOME/.ssh/staging_key"
+          sh scripts/deploy_staging.sh
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: python -m pip install ".[dev]"
+
+      - name: Authenticated smoke
+        run: python scripts/acceptance_smoke.py
+
+      - name: Bounded load qualification
+        run: python scripts/load_test.py
+
+      - name: PostgreSQL backup and disposable restore
+        run: sh scripts/test_restore_postgres.sh
+
+      - name: Live provider certification
+        run: python scripts/certify_providers.py
+
+      - name: Live Tool Registry integration certification
+        run: python scripts/certify_integrations.py
+
+      - name: Controlled staging restart chaos
+        if: inputs.run_chaos
+        env:
+          STAGING_SSH_HOST: ${{ secrets.STAGING_SSH_HOST }}
+          STAGING_SSH_USER: ${{ secrets.STAGING_SSH_USER }}
+          STAGING_SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+          STAGING_DEPLOY_PATH: ${{ secrets.STAGING_DEPLOY_PATH }}
+        run: |
+          export STAGING_SSH_KEY_PATH="$HOME/.ssh/staging_key"
+          sh scripts/chaos_staging_remote.sh
+
+      - name: Final readiness smoke
+        run: python scripts/acceptance_smoke.py
