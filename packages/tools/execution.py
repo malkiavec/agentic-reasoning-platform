@@ -11,7 +11,7 @@ from jsonschema import Draft202012Validator
 from redis.asyncio import Redis
 
 from packages.security.kill_switch import KillSwitch
-from packages.security.policy import Action, PolicyEngine
+from packages.security.policy import Action, PolicyEngine, Decision, Risk
 from packages.tools.contracts import ToolContext
 from packages.tools.registry import ToolRegistry
 from packages.db.action_ledger import begin_action, complete_action
@@ -108,6 +108,27 @@ class ToolExecutor:
         )
         if not decision.allowed:
             return ExecutionResult(False, error=decision.reason)
+
+        from sqlalchemy import text
+        async with SessionLocal() as policy_session:
+            policy_row = (await policy_session.execute(
+                text("SELECT policy FROM tenant_policies WHERE tenant_id=:tenant"),
+                {"tenant": tenant_id},
+            )).first()
+        tenant_policy = policy_row[0] if policy_row and isinstance(policy_row[0], dict) else {}
+        blocked_tools = {str(x) for x in tenant_policy.get("blocked_tools", [])}
+        approval_tools = {str(x) for x in tenant_policy.get("approval_tools", [])}
+        if tool_name in blocked_tools:
+            return ExecutionResult(False, error="tenant_policy_blocked")
+        max_risk = tenant_policy.get("max_risk")
+        if max_risk is not None:
+            try:
+                if decision.risk > Risk[str(max_risk).upper()]:
+                    return ExecutionResult(False, error="tenant_policy_risk_limit")
+            except KeyError:
+                return ExecutionResult(False, error="tenant_policy_invalid")
+        if tool_name in approval_tools and not decision.requires_approval:
+            decision = Decision(True, decision.risk, True, "tenant_policy_requires_approval")
 
         base_action_id = action_fingerprint(tool_name, arguments)
         action_id = action_fingerprint(base_action_id, {"run_id": run_id or request_id or actor})
