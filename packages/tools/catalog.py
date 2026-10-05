@@ -15,7 +15,15 @@ def build_default_registry()->ToolRegistry:
     r.register_external("github","Read GitHub repositories, files, issues, and code",GitHubAdapter(),input_schema={"type":"object","properties":{"action":{"type":"string","enum":["get_repository","list_issues","get_file","search_code"]},"owner":{"type":"string","maxLength":100},"repo":{"type":"string","maxLength":100},"path":{"type":"string","maxLength":1000},"ref":{"type":"string","maxLength":256},"query":{"type":"string","maxLength":1000},"state":{"type":"string","enum":["open","closed","all"]},"per_page":{"type":"integer","minimum":1,"maximum":100}},"required":["action"],"additionalProperties":False})
     r.register_external("github.write","Write to GitHub; always requires human approval",GitHubWriteAdapter(),input_schema={"type":"object","properties":{"owner":{"type":"string","maxLength":100},"repo":{"type":"string","maxLength":100},"method":{"type":"string","enum":["POST","PATCH","PUT","DELETE"]},"path":{"type":"string","maxLength":1000},"body":{}},"required":["owner","repo","method","path"],"additionalProperties":False})
     r.register_external("http.rest","Perform an outbound HTTP request through the SSRF and egress boundary",HttpRestAdapter(),input_schema={"type":"object","properties":{"method":{"type":"string","enum":["GET","HEAD","POST","PUT","PATCH","DELETE"]},"url":{"type":"string","maxLength":2048},"headers":{"type":"object","additionalProperties":{"type":"string"}},"json":{},"timeout_seconds":{"type":"number","minimum":0.1,"maximum":20}},"required":["url"],"additionalProperties":False},permissions=frozenset({"network.egress"}))
-    for name,cls in INTEGRATION_ADAPTERS.items(): r.register_external(name,f"Production {name} integration",cls(),input_schema=_GENERIC)
+    for name,cls in INTEGRATION_ADAPTERS.items():
+        schema=_GENERIC
+        if name=="databases":
+            schema={"type":"object","properties":{"query":{"type":"string","minLength":1,"maxLength":100000},"parameters":{"type":"array","maxItems":100}},"required":["query"],"additionalProperties":False}
+        elif name=="webhooks":
+            schema={"type":"object","properties":{"url":{"type":"string","maxLength":2048},"method":{"type":"string","enum":["POST","PUT","PATCH"]},"headers":{"type":"object","additionalProperties":{"type":"string"}},"body":{}},"required":["url"],"additionalProperties":False}
+        elif name=="mcp":
+            schema={"type":"object","properties":{"url":{"type":"string","maxLength":2048},"method":{"type":"string","pattern":"^tools/"},"params":{"type":"object"}},"required":["url"],"additionalProperties":False}
+        r.register_external(name,f"Production {name} integration",cls(),input_schema=schema)
     return r
 
 EXTERNAL_TOOL_FAMILIES=("web.search","github","github.write","gitlab","slack","discord","gmail","google_drive","notion","linear","jira","databases","http.rest","webhooks","mcp")
