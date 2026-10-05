@@ -133,6 +133,8 @@ class ToolExecutor:
         if adapter is None:
             return ExecutionResult(False, error="tool_adapter_unavailable", action_id=action_id)
 
+        action_idempotent = adapter.is_idempotent(arguments)
+
         async with SessionLocal() as ledger_session:
             ledger = await begin_action(
                 ledger_session,
@@ -140,11 +142,11 @@ class ToolExecutor:
                 run_id=UUID(run_id) if run_id else None,
                 action_id=action_id,
                 tool=tool_name,
-                idempotent=spec.security.idempotent,
+                idempotent=action_idempotent,
             )
             if ledger.status == "completed":
                 return ExecutionResult(True, output=ledger.output, approval_id=approved_approval_id, action_id=action_id)
-            if ledger.status == "ambiguous" or (ledger.status == "in_progress" and not spec.security.idempotent):
+            if ledger.status == "ambiguous" or (ledger.status == "in_progress" and not action_idempotent):
                 return ExecutionResult(False, error="action_recovery_required", action_id=action_id)
 
         redis = Redis.from_url(self.redis_url, decode_responses=True)
@@ -192,7 +194,7 @@ class ToolExecutor:
                         run_id=UUID(run_id) if run_id else None,
                         action_id=action_id,
                         tool=tool_name,
-                        idempotent=spec.security.idempotent,
+                        idempotent=action_idempotent,
                     )
                     await complete_action(ledger_session, ledger, value)
                 return ExecutionResult(
@@ -210,7 +212,7 @@ class ToolExecutor:
             if count > spec.rate_limit_per_minute:
                 return ExecutionResult(False, error="tool_rate_limit_exceeded", action_id=action_id)
 
-            if spec.security.idempotent:
+            if action_idempotent:
                 cached = await redis.get(result_key)
                 if cached:
                     try:
@@ -274,7 +276,7 @@ class ToolExecutor:
                 Draft202012Validator(spec.output_schema).iter_errors(value)
             ):
                 return ExecutionResult(False, error="invalid_tool_output", action_id=action_id)
-            if spec.security.idempotent:
+            if action_idempotent:
                 try:
                     await redis.set(
                         result_key,
@@ -290,7 +292,7 @@ class ToolExecutor:
                     run_id=__import__("uuid").UUID(run_id) if run_id else None,
                     action_id=action_id,
                     tool=tool_name,
-                    idempotent=spec.security.idempotent,
+                    idempotent=action_idempotent,
                 )
                 await complete_action(ledger_session, ledger, value)
             return ExecutionResult(
