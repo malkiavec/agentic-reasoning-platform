@@ -152,10 +152,11 @@ async def _execute_run(task, run_id: str) -> dict:
             await emit(redis, run_id, "run.completed", steps=len(checkpoint.completed_steps), _tenant_id=record.tenant_id)
             return {"run_id": run_id, "state": "completed"}
     except Exception:
-        async with SessionLocal() as session:
-            await update_run(session, UUID(run_id), state="failed",
-                             checkpoint={"state": "failed", "error": "execution_error"})
-        await emit(redis, run_id, "run.failed", reason="execution_error")
+        # Do not convert infrastructure/provider failures into a terminal state.
+        # Celery will retry this task; the durable checkpoint remains authoritative.
+        # Terminal failure is recorded only when the retry budget is exhausted by
+        # the task runner or when the execution loop explicitly reaches FAILED.
+        await emit(redis, run_id, "run.retry_scheduled", reason="execution_error")
         raise
     finally:
         await redis.aclose()
