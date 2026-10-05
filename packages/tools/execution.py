@@ -75,11 +75,14 @@ class ToolExecutor:
         integration_names = frozenset({"web.search","github","github.write","gitlab","slack","discord","gmail","google_drive","notion","linear","jira","databases","webhooks","mcp","http.rest"})
         if tool_name in integration_names:
             from sqlalchemy import text
+            credential_ref = None
             async with SessionLocal() as integration_session:
                 row = (await integration_session.execute(
-                    text("SELECT enabled FROM tenant_integrations WHERE tenant_id=:tenant AND tool_name=:tool"),
+                    text("SELECT enabled, credential_ref FROM tenant_integrations WHERE tenant_id=:tenant AND tool_name=:tool"),
                     {"tenant": tenant_id, "tool": tool_name},
                 )).first()
+                if row is not None:
+                    credential_ref = row[1]
             if row is None:
                 return ExecutionResult(False, error="integration_not_configured")
             if not bool(row[0]):
@@ -306,6 +309,7 @@ class ToolExecutor:
                 actor=actor,
                 run_id=run_id or "",
                 request_id=request_id or run_id or "",
+                credential_ref=credential_ref,
             )
             try:
                 value = await asyncio.wait_for(
