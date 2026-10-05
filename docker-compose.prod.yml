@@ -31,6 +31,9 @@ services:
       dockerfile: infrastructure/docker/api.Dockerfile
     restart: unless-stopped
     env_file: .env
+    read_only: true
+    tmpfs: ["/tmp"]
+    security_opt: ["no-new-privileges:true"]
     depends_on:
       postgres:
         condition: service_healthy
