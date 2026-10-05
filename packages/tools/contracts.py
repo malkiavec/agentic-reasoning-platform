@@ -15,6 +15,7 @@ class ToolContext:
     actor: str
     run_id: str
     request_id: str
+    credential_ref: str | None = None
 
 class ToolAdapter:
     name: str
