@@ -20,5 +20,8 @@ class ToolAdapter:
     name: str
     security: ToolSecurity
 
+    def is_idempotent(self, arguments: dict[str, Any]) -> bool:
+        return self.security.idempotent
+
     async def invoke(self, arguments: dict[str, Any], context: ToolContext) -> Any:
         raise NotImplementedError
