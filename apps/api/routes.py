@@ -17,7 +17,10 @@ PROM_COUNTERS={n:Counter(f"agent_{n}_total",f"Agent platform {n}") for n in ("co
 PROM_HISTOGRAMS={n:Histogram(f"agent_{n}_seconds",f"Agent platform {n} latency") for n in ("run","tool")}
 
 @router.get("/system/metrics")
-async def system_metrics(): return metrics.snapshot()
+async def system_metrics(principal:RequestPrincipal=Depends(require_principal)):
+    if "admin" not in principal.roles and "platform_admin" not in principal.roles:
+        raise HTTPException(403,"admin_role_required")
+    return metrics.snapshot()
 
 @router.get("/metrics",include_in_schema=False)
 async def prometheus_metrics(): return Response(content=generate_latest(),media_type=CONTENT_TYPE_LATEST)
@@ -36,6 +39,7 @@ async def cancel_run(run_id:UUID,principal:RequestPrincipal=Depends(require_prin
 async def set_kill_switch(enabled:bool=True,tenant_id:str|None=None,global_scope:bool=False,principal:RequestPrincipal=Depends(require_principal)):
     if "admin" not in principal.roles: raise HTTPException(403,"admin_role_required")
     if global_scope and tenant_id is not None: raise HTTPException(400,"global_and_tenant_scope_conflict")
+    if global_scope and "platform_admin" not in principal.roles: raise HTTPException(403,"platform_admin_role_required")
     if tenant_id is not None and tenant_id!=principal.tenant_id: raise HTTPException(403,"cross_tenant_kill_switch_forbidden")
     target=None if global_scope else (tenant_id or principal.tenant_id); switch=KillSwitch()
     await (switch.activate(target) if enabled else switch.deactivate(target))
@@ -94,6 +98,14 @@ async def get_policy(principal:RequestPrincipal=Depends(require_principal)):
 @router.put("/admin/policy")
 async def set_policy(policy:dict,principal:RequestPrincipal=Depends(require_principal)):
     if "admin" not in principal.roles: raise HTTPException(403,"admin_role_required")
+    if len(policy) > 32: raise HTTPException(400,"policy_too_large")
+    registry=build_default_registry()
+    blocked=policy.get("blocked_tools",[])
+    approval=policy.get("approval_tools",[])
+    if not isinstance(blocked,list) or not isinstance(approval,list): raise HTTPException(400,"policy_tool_lists_required")
+    registered={s.name for s in registry.list()}
+    if any(str(x) not in registered for x in [*blocked,*approval]): raise HTTPException(400,"policy_references_unregistered_tool")
+    if policy.get("max_risk") is not None and str(policy["max_risk"]).lower() not in {"low","medium","high","critical"}: raise HTTPException(400,"policy_invalid_max_risk")
     async with SessionLocal() as s:
         await s.execute(text("""INSERT INTO tenant_policies(tenant_id,policy,updated_by,updated_at) VALUES(:tenant,CAST(:policy AS jsonb),:actor,now())
         ON CONFLICT(tenant_id) DO UPDATE SET policy=EXCLUDED.policy,updated_by=EXCLUDED.updated_by,updated_at=now()"""),
@@ -132,7 +144,8 @@ async def list_integrations(principal:RequestPrincipal=Depends(require_principal
 async def configure_integration(tool_name:str,enabled:bool=True,config:dict|None=None,credential_ref:str|None=None,principal:RequestPrincipal=Depends(require_principal)):
     if "admin" not in principal.roles: raise HTTPException(403,"admin_role_required")
     if build_default_registry().get(tool_name) is None: raise HTTPException(404,"tool_not_registered")
-    if credential_ref and len(credential_ref)>512: raise HTTPException(400,"credential_ref_too_long")
+    if credential_ref and (len(credential_ref)>128 or any(ch not in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-" for ch in credential_ref)):
+        raise HTTPException(400,"invalid_credential_ref")
     async with SessionLocal() as s:
         await s.execute(text("""INSERT INTO tenant_integrations(tenant_id,tool_name,enabled,config,credential_ref,updated_by,updated_at)
         VALUES(:tenant,:tool,:enabled,CAST(:config AS jsonb),:ref,:actor,now()) ON CONFLICT(tenant_id,tool_name) DO UPDATE SET enabled=EXCLUDED.enabled,config=EXCLUDED.config,credential_ref=EXCLUDED.credential_ref,updated_by=EXCLUDED.updated_by,updated_at=now()"""),
