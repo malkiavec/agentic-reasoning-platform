@@ -56,7 +56,7 @@ class DiscordAdapter(SaaSAdapter):
         return await super()._request(method,url,"",headers={"Authorization":f"Bot {token}"},**{k:v for k,v in kw.items() if k!="headers"})
 
 class GmailAdapter(SaaSAdapter):
-    name="gmail"; credential_name="gmail"; base_url="https://gmail.googleapis.com/gmail/v1/users/me"; security=ToolSecurity(risk="high",timeout_seconds=20,idempotent=False)
+    name="gmail"; credential_name="gmail"; base_url="https://gmail.googleapis.com/gmail/v1/users/me"; security=ToolSecurity(risk="high",timeout_seconds=20,idempotent=False,requires_approval=True)
     def _path(self,action,a):
         m={"messages":"messages","message":f"messages/{quote(str(a['message_id']))}","send":"messages/send","threads":"threads"}
         if action not in m: raise ValueError("unsupported_gmail_action")
