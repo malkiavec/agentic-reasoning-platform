@@ -5,6 +5,7 @@ import os
 import time
 from dataclasses import dataclass
 from typing import Any
+from uuid import UUID
 
 from jsonschema import Draft202012Validator
 from redis.asyncio import Redis
@@ -136,7 +137,7 @@ class ToolExecutor:
             ledger = await begin_action(
                 ledger_session,
                 tenant_id=tenant_id,
-                run_id=__import__("uuid").UUID(run_id) if run_id else None,
+                run_id=UUID(run_id) if run_id else None,
                 action_id=action_id,
                 tool=tool_name,
                 idempotent=spec.security.idempotent,
@@ -184,6 +185,16 @@ class ToolExecutor:
                         error="invalid_tool_output",
                         action_id=action_id,
                     )
+                async with SessionLocal() as ledger_session:
+                    ledger = await begin_action(
+                        ledger_session,
+                        tenant_id=tenant_id,
+                        run_id=UUID(run_id) if run_id else None,
+                        action_id=action_id,
+                        tool=tool_name,
+                        idempotent=spec.security.idempotent,
+                    )
+                    await complete_action(ledger_session, ledger, value)
                 return ExecutionResult(
                     True,
                     output=value,
@@ -203,9 +214,20 @@ class ToolExecutor:
                 cached = await redis.get(result_key)
                 if cached:
                     try:
+                        cached_value = json.loads(cached)
+                        async with SessionLocal() as ledger_session:
+                            ledger = await begin_action(
+                                ledger_session,
+                                tenant_id=tenant_id,
+                                run_id=UUID(run_id) if run_id else None,
+                                action_id=action_id,
+                                tool=tool_name,
+                                idempotent=spec.security.idempotent,
+                            )
+                            await complete_action(ledger_session, ledger, cached_value)
                         return ExecutionResult(
                             True,
-                            output=json.loads(cached),
+                            output=cached_value,
                             action_id=action_id,
                         )
                     except json.JSONDecodeError:
