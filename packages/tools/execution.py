@@ -224,7 +224,7 @@ class ToolExecutor:
                                 run_id=UUID(run_id) if run_id else None,
                                 action_id=action_id,
                                 tool=tool_name,
-                                idempotent=spec.security.idempotent,
+                                idempotent=action_idempotent,
                             )
                             await complete_action(ledger_session, ledger, cached_value)
                         return ExecutionResult(
