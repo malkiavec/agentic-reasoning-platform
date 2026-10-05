@@ -1,8 +1,9 @@
 import asyncio
 import pytest
+from sqlalchemy import text
 from packages.db.action_ledger import begin_action, complete_action
 from packages.db.session import SessionLocal
-from packages.tools.contracts import ToolAdapter, ToolContext, ToolSecurity
+from packages.tools.contracts import ToolAdapter, ToolSecurity
 from packages.tools.execution import ToolExecutor
 from packages.tools.registry import ToolRegistry, ToolSpec
 
@@ -28,6 +29,20 @@ async def test_concurrent_duplicate_ledger_claims_share_one_action():
     async with SessionLocal() as s:
         row=await begin_action(s,tenant_id="concurrency",run_id=None,action_id="same",tool="echo",idempotent=True)
         assert row.status=="completed"
+
+@pytest.mark.asyncio
+async def test_database_connection_interruption_recovers():
+    victim=SessionLocal()
+    killer=SessionLocal()
+    try:
+        pid=(await victim.execute(text("SELECT pg_backend_pid()"))).scalar_one()
+        await killer.execute(text("SELECT pg_terminate_backend(:pid)"),{"pid":pid})
+        with pytest.raises(Exception):
+            await victim.execute(text("SELECT 1"))
+    finally:
+        await victim.close(); await killer.close()
+    async with SessionLocal() as recovered:
+        assert (await recovered.execute(text("SELECT 1"))).scalar_one()==1
 
 class SlowAdapter(ToolAdapter):
     name="slow.provider"; security=ToolSecurity(timeout_seconds=0.01,idempotent=True)
